@@ -12,8 +12,9 @@ from pydantic import BaseModel, Field
 
 from panel.bot import MONITOR_MODE, PaperBot, PaperBotError
 from panel.common import USERDIR, list_strategies, load_json
-from panel.replay import REPLAY_DIR, ReplayJobs
+from panel.replay import REPLAY_DIR, BacktestError, ReplayJobs, SessionReplays
 from ridgeline import audit
+from ridgeline.reconcile import session_info
 from ridgeline.report import build_tearsheet, load_trades_backtest, load_trades_db, session_balance
 
 STATIC = Path(__file__).parent / "static"
@@ -23,6 +24,7 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 bot = PaperBot()
 replays = ReplayJobs()
+session_replays = SessionReplays()
 
 
 class PaperStart(BaseModel):
@@ -149,11 +151,30 @@ def _valid_month(month: Optional[str]) -> Optional[str]:
     return month or None
 
 
-@app.get("/api/report", response_class=HTMLResponse)
-def paper_report(session: str, month: Optional[str] = None):
-    db = USERDIR / "paper" / f"{_valid_id(session)}.sqlite"
+def _session_db(session_id: str) -> Path:
+    db = USERDIR / "paper" / f"{_valid_id(session_id)}.sqlite"
     if not db.exists():
         raise HTTPException(404, "No such paper session")
+    return db
+
+
+@app.post("/api/paper/sessions/{session_id}/reconcile")
+def reconcile_start(session_id: str):
+    db = _session_db(session_id)
+    try:
+        return session_replays.submit(session_info(db))
+    except (ValueError, BacktestError) as e:
+        raise HTTPException(409, str(e))
+
+
+@app.get("/api/paper/sessions/{session_id}/reconcile")
+def reconcile_get(session_id: str):
+    return session_replays.get(session_id, _session_db(session_id)) or {"status": "none"}
+
+
+@app.get("/api/report", response_class=HTMLResponse)
+def paper_report(session: str, month: Optional[str] = None):
+    db = _session_db(session)
     try:
         trades = load_trades_db(db)
         return build_tearsheet(trades, session_balance(db), title="Ridgeline - paper trading report",
@@ -202,6 +223,25 @@ def replay_history():
     return replays.history()
 
 
+def _latest_reconciliations() -> dict:
+    """Newest paper-vs-replay result per strategy (panel sessions and the
+    Docker bot's database), for the last go-live gate."""
+    out = {}
+    for path in [*(USERDIR / "paper").glob("*.reconcile.json"), *USERDIR.glob("*.reconcile.json")]:
+        r = load_json(path, None) or {}
+        if r.get("status") != "done":
+            continue
+        strategy = r["session"]["strategy"]
+        if strategy not in out or r["generated"] > out[strategy]["generated"]:
+            out[strategy] = {"session_id": r["session"]["session_id"], "generated": r["generated"],
+                             "days": r["period"]["days"], "close_to_replay": r["close_to_replay"],
+                             "passed": sum(c["pass"] for c in r["checks"]), "checks": len(r["checks"])}
+    return out
+
+
 @app.get("/api/research")
 def research():
-    return load_json(USERDIR / "research" / "latest.json", None) or {}
+    report = load_json(USERDIR / "research" / "latest.json", None) or {}
+    if report:
+        report["paper_checks"] = _latest_reconciliations()
+    return report

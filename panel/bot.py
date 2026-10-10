@@ -29,6 +29,7 @@ import psutil
 
 from panel.common import FREQTRADE, ROOT, USERDIR, config_args, load_json, merged_config
 from ridgeline import audit
+from ridgeline.reconcile import strategy_fingerprint
 from ridgeline.risk import RiskLimits, build_state, limits_summary, load_halt, set_halt
 
 MONITOR_MODE = os.environ.get("PANEL_MODE", "").lower() == "monitor"
@@ -110,6 +111,18 @@ class PaperBot:
         }, indent=2))
         args = [*config_args(), "-c", str(session_cfg)]
         self._verify_dry_run(args)
+        # What this session runs, for reconciling it with a replay later:
+        # config.json's pair list changes monthly, and code can change mid-session.
+        cfg = merged_config()
+        (PAPER_DIR / f"{session_id}.meta.json").write_text(json.dumps({
+            "session_id": session_id,
+            "strategy": strategy,
+            "balance": balance,
+            "pairs": cfg.get("exchange", {}).get("pair_whitelist", []),
+            "max_open_trades": cfg.get("max_open_trades"),
+            "started": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "code": strategy_fingerprint(strategy),
+        }, indent=2))
 
         log_path = PAPER_DIR / f"{session_id}.log"
         cmd = [*FREQTRADE, "trade", *args, "--strategy", strategy, "--logfile", str(log_path)]
@@ -305,6 +318,7 @@ class PaperBot:
         rows = []
         for db in sorted(PAPER_DIR.glob("*.sqlite"), reverse=True):
             cfg = load_json(db.with_suffix(".config.json"), {}) or {}
+            meta = load_json(db.with_suffix(".meta.json"), {}) or {}
             rows.append({"session_id": db.stem, "balance": cfg.get("dry_run_wallet"),
-                         "size_kb": round(db.stat().st_size / 1024, 1)})
+                         "strategy": meta.get("strategy"), "size_kb": round(db.stat().st_size / 1024, 1)})
         return rows

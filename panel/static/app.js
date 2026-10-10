@@ -108,6 +108,10 @@ async function refreshPaper() {
   } else if (session) {
     rows.push(["Strategy", esc(session.strategy)], ["Starting balance", fmtMoney(session.balance)]);
   }
+  if (session && session.session_id !== knownSessionId) {
+    knownSessionId = session.session_id;
+    loadReconSessions(knownSessionId);
+  }
   if (session) {
     rows.push([st.managed ? "Session" : "Last session", `${esc(session.session_id)}`]);
     rows.push(["Report", `<a href="/api/report?session=${encodeURIComponent(session.session_id)}" target="_blank" rel="noopener">Performance tear sheet ↗</a>`]);
@@ -196,6 +200,124 @@ $("#paper-reset").addEventListener("click", () => {
   const bal = +$("#paper-balance").value;
   if (!confirm(`Start a fresh paper session with ${bal} USDT? The current session's trades are kept in its own archive file.`)) return;
   paperAction(() => api("/api/paper/reset", { method: "POST", body: { balance: bal, strategy: $("#paper-strategy").value } }));
+});
+
+// =====================================================================
+// Paper vs replay
+// =====================================================================
+let knownSessionId = null;
+let reconPolling = null;
+
+const checkMark = (pass) => `<span class="mark ${pass ? "pos" : "neg"}">${pass ? "✓" : "✗"}</span>`;
+const fmtPts = (v) => (v == null || isNaN(v) ? "–" : `${v > 0 ? "+" : ""}${Number(v).toFixed(2)} pts`);
+
+async function loadReconSessions(preferred) {
+  const sel = $("#recon-session");
+  const rows = await api("/api/paper/sessions").catch(() => []);
+  const want = preferred || sel.value;
+  sel.innerHTML = rows.map((s) => `<option value="${esc(s.session_id)}">${esc(s.session_id)}` +
+    `${s.strategy ? ` · ${esc(s.strategy)}` : ""}${s.balance ? ` · ${esc(s.balance)} USDT` : ""}</option>`).join("");
+  if (want && rows.some((s) => s.session_id === want)) sel.value = want;
+  $("#recon-run").disabled = !rows.length;
+  if (!rows.length) {
+    $("#recon-status").textContent = "No paper sessions yet.";
+    return;
+  }
+  loadRecon();
+}
+
+async function loadRecon() {
+  const id = $("#recon-session").value;
+  if (!id) return;
+  const r = await api(`/api/paper/sessions/${encodeURIComponent(id)}/reconcile`)
+    .catch((e) => ({ status: "error", error: e.message }));
+  if (id !== $("#recon-session").value) return; // selection changed meanwhile
+  renderRecon(r);
+  if (r.status === "running") pollRecon(id);
+}
+
+async function pollRecon(id) {
+  if (reconPolling === id) return;
+  reconPolling = id;
+  while (reconPolling === id && $("#recon-session").value === id) {
+    await new Promise((res) => setTimeout(res, 2000));
+    const r = await api(`/api/paper/sessions/${encodeURIComponent(id)}/reconcile`).catch(() => null);
+    if (!r || $("#recon-session").value !== id) break;
+    renderRecon(r);
+    if (r.status !== "running") break;
+  }
+  if (reconPolling === id) reconPolling = null;
+}
+
+function renderRecon(r) {
+  const status = $("#recon-status");
+  const verdict = $("#recon-verdict");
+  const result = $("#recon-result");
+  $("#recon-run").disabled = r.status === "running";
+  verdict.hidden = r.status !== "done";
+  result.hidden = r.status !== "done";
+  if (r.status === "none") {
+    status.textContent = "Not compared yet.";
+    return;
+  }
+  if (r.status === "running") {
+    status.textContent = "Replaying… (tops up candle data first; usually under a minute)";
+    return;
+  }
+  if (r.status === "error") {
+    status.innerHTML = `<span class="neg">Comparison failed:</span> <code>${esc(r.error).slice(0, 600)}</code>`;
+    return;
+  }
+
+  verdict.className = `pill ${r.close_to_replay ? "on" : "ext"}`;
+  verdict.textContent = r.close_to_replay ? "Close to replay" : "Not close yet";
+  status.textContent = `Compared ${r.generated.replace("T", " ").slice(0, 16)} UTC · ` +
+    `${r.period.start.slice(0, 16).replace("T", " ")} → ${r.period.end.slice(0, 16).replace("T", " ")} UTC (${r.period.days} days)`;
+
+  $("#recon-checks").innerHTML = r.checks.map((c) =>
+    `<li>${checkMark(c.pass)}<span>${esc(c.label)} <span class="muted">(${c.value == null ? "n/a" : esc(c.value)})</span></span></li>`).join("");
+
+  const p = r.paper, rp = r.replay, m = r.matching, g = r.gap, f = r.fills;
+  const total = m.matched + m.paper_only + m.replay_only;
+  $("#recon-tiles").innerHTML = [
+    tile("Paper return (realised)", fmtPct(p.return_pct), signClass(p.return_pct), `${p.closed} closed, ${p.open} open`),
+    tile("Replay return (realised)", fmtPct(rp.return_pct), signClass(rp.return_pct), `${rp.closed} closed, ${rp.open} open`),
+    tile("Gap (paper − replay)", fmtPts(g.return_gap_pp), signClass(g.return_gap_pp),
+      `matched ${fmtMoney(g.matched_abs, "")} · paper-only ${fmtMoney(g.paper_only_abs, "")} · replay-only ${fmtMoney(g.replay_only_abs, "")}`),
+    tile("Trades in both", `${m.matched} / ${total}`, "", `${m.paper_only} paper-only, ${m.replay_only} replay-only`),
+    tile("Fill cost per side", fmtPct(f.fill_cost_pct, 3), f.fill_cost_pct > 0 ? "neg" : "",
+      `entry ${fmtPct(f.entry_cost_pct, 3)} · exit ${fmtPct(f.exit_cost_pct, 3)}`),
+  ].join("");
+
+  $("#recon-warnings").innerHTML = r.warnings.map((w) => `<li>${esc(w)}</li>`).join("");
+
+  const label = { matched: "Both", paper_only: "Paper only", replay_only: "Replay only" };
+  table($("#recon-trades"), [
+    { label: "Pair", key: "pair" },
+    { label: "In", render: (t) => esc(label[t.status]), cls: (t) => (t.status === "matched" ? "" : "neg") },
+    { label: "Paper entry (UTC)", render: (t) => esc(t.paper_open ?? "–") },
+    { label: "Replay entry (UTC)", render: (t) => esc(t.replay_open ?? "–") },
+    { label: "Entry cost", num: true, render: (t) => fmtPct(t.entry_cost_pct, 3), cls: (t) => signClass(-t.entry_cost_pct) },
+    { label: "Exit (paper / replay)", render: (t) => `${esc(t.paper_exit ?? "–")} / ${esc(t.replay_exit ?? "–")}` },
+    { label: "Exit cost", num: true, render: (t) => fmtPct(t.exit_cost_pct, 3), cls: (t) => signClass(-t.exit_cost_pct) },
+    { label: "Paper P&L", num: true, render: (t) => fmtPct(t.paper_profit_pct), cls: (t) => signClass(t.paper_profit_pct) },
+    { label: "Replay P&L", num: true, render: (t) => fmtPct(t.replay_profit_pct), cls: (t) => signClass(t.replay_profit_pct) },
+  ], r.trades, { empty: "No trades on either side in this period." });
+}
+
+$("#recon-session").addEventListener("change", () => loadRecon());
+$("#recon-run").addEventListener("click", async () => {
+  const id = $("#recon-session").value;
+  if (!id) return;
+  $("#recon-run").disabled = true;
+  $("#recon-status").textContent = "Starting…";
+  try {
+    renderRecon(await api(`/api/paper/sessions/${encodeURIComponent(id)}/reconcile`, { method: "POST" }));
+    pollRecon(id);
+  } catch (e) {
+    $("#recon-status").innerHTML = `<span class="neg">${esc(e.message)}</span>`;
+    $("#recon-run").disabled = false;
+  }
 });
 
 // =====================================================================
@@ -353,6 +475,12 @@ async function loadResearch() {
   const entries = Object.entries(r.strategies).sort((a, b) => b[1].oos.calmar - a[1].oos.calmar);
   for (const [name, s] of entries) {
     const passed = s.gates.filter((g) => g.pass).length;
+    const pc = (r.paper_checks || {})[name];
+    const paperGate = pc
+      ? `<li>${checkMark(pc.close_to_replay)}<span>4+ weeks of paper trading close to replay ` +
+        `<span class="muted">(session ${esc(pc.session_id)}: ${pc.days} days, ${pc.passed}/${pc.checks} checks)</span></span></li>`
+      : `<li><span class="mark muted">○</span><span>4+ weeks of paper trading close to replay ` +
+        `<span class="muted">(not compared yet: Paper trading → Paper vs replay)</span></span></li>`;
     const badge = s.eligible_for_paper
       ? `<span class="pill on">Eligible for 4-week paper test</span>`
       : `<span class="pill ext">${passed}/${s.gates.length} gates passed</span>`;
@@ -366,7 +494,7 @@ async function loadResearch() {
       <div class="grid-2">
         <div>
           <ul class="gate-list">${s.gates.map((g) => `<li><span class="mark ${g.pass ? "pos" : "neg"}">${g.pass ? "✓" : "✗"}</span><span>${esc(g.label)} <span class="muted">(${esc(g.value)})</span></span></li>`).join("")}
-            <li><span class="mark muted">○</span><span>4+ weeks of paper trading close to replay <span class="muted">(manual)</span></span></li>
+            ${paperGate}
           </ul>
         </div>
         <div>
@@ -464,6 +592,7 @@ $("#risk-flatten").addEventListener("click", () => {
       `<p class="muted small" style="margin-top:10px">Monitor mode: the bot runs as a Docker service, so Start/Stop/Reset are disabled here. Risk controls still work.</p>`);
   }
   await loadStrategies().catch(() => {});
+  loadReconSessions();
   let tab = "paper";
   try { tab = localStorage.getItem("tab") || "paper"; } catch {}
   document.querySelector(`.tab[data-tab="${tab}"]`)?.click();

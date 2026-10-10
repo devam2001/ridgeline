@@ -1,6 +1,8 @@
 # Fast historical replay: run a Freqtrade backtest with a chosen starting
 # balance and date range, then reduce the result to what the UI and the
 # research scripts need (metrics, equity curve vs buy-and-hold, trades).
+# Also replays a paper session's exact period to reconcile it against paper
+# trading (ridgeline/reconcile.py has the comparison itself).
 
 import json
 import re
@@ -15,8 +17,12 @@ from typing import Optional
 import pandas as pd
 
 from panel.common import DATADIR, FREQTRADE, USERDIR, config_args
+from ridgeline import audit
+from ridgeline.reconcile import SessionInfo, load_paper_trades, load_replay_trades, reconcile, strategy_timeframe
 
 REPLAY_DIR = USERDIR / "replays"
+# Daily EMA200 filters need ~200 days of history before the first candle.
+WARMUP_DAYS = 250
 
 
 class BacktestError(RuntimeError):
@@ -65,6 +71,92 @@ def run_backtest(
         raise BacktestError("\n".join(tail))
 
     return summarize(outdir, strategy)
+
+
+def download_data(pairs: list[str], since: pd.Timestamp, log_path: Path,
+                  timeframes: tuple[str, ...] = ("1h", "4h", "1d")) -> None:
+    """Top up candle data for these pairs to the latest closed candle."""
+    cmd = [*FREQTRADE, "download-data", *config_args(), "--pairs", *pairs,
+           "--timeframes", *timeframes, "--timerange", f"{since:%Y%m%d}-"]
+    with open(log_path, "w", encoding="utf-8", errors="replace") as log:
+        proc = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT)
+    if proc.returncode != 0:
+        tail = log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-15:]
+        raise BacktestError("Data download failed:\n" + "\n".join(tail))
+
+
+def replay_window(info: SessionInfo) -> tuple[str, pd.Timestamp]:
+    """The strategy's timeframe and the replay's first candle: the one the
+    session's first decision was based on. Raises if it hasn't closed yet."""
+    timeframe = strategy_timeframe(info.strategy)
+    start = info.start.floor(pd.Timedelta(timeframe))
+    first_close = start + pd.Timedelta(timeframe)
+    if first_close > pd.Timestamp.now(tz="UTC"):
+        raise BacktestError(f"Nothing to replay yet: the session's first {timeframe} candle closes at "
+                            f"{first_close:%Y-%m-%d %H:%M} UTC.")
+    return timeframe, start
+
+
+def replay_session(info: SessionInfo, outdir: Optional[Path] = None, download: bool = True) -> dict:
+    """Replay a paper session's exact period (same strategy, pairs, balance)
+    and reconcile it with what paper trading did."""
+    timeframe, start = replay_window(info)
+    outdir = Path(outdir or REPLAY_DIR / f"session-{info.session_id}")
+    outdir.mkdir(parents=True, exist_ok=True)
+    if download:
+        # BTC/USDT feeds the strategies' market-regime filter even when it isn't traded.
+        download_data(sorted({*info.pairs, "BTC/USDT"}), start - pd.Timedelta(days=WARMUP_DAYS),
+                      outdir / "download.log")
+    run_backtest(info.strategy, f"{int(start.timestamp())}-{int(info.end.timestamp())}", info.balance,
+                 pairs=info.pairs, max_open_trades=info.max_open_trades, outdir=outdir)
+    replay, meta = load_replay_trades(outdir)
+    return reconcile(load_paper_trades(info.db), replay, info=info, replay_end=meta["end"],
+                     timeframe=timeframe, events=audit.tail(100_000))
+
+
+def reconcile_path(db: Path) -> Path:
+    """Where a session's latest reconciliation is kept: next to its database."""
+    return Path(db).with_suffix(".reconcile.json")
+
+
+class SessionReplays:
+    """Paper-vs-replay reconciliations for the panel, one at a time. The result
+    is written next to the session's database, so it outlives the panel."""
+
+    def __init__(self):
+        self._pool = ThreadPoolExecutor(max_workers=1)
+        self._lock = threading.Lock()
+        self._running: dict[str, dict] = {}
+
+    def submit(self, info: SessionInfo) -> dict:
+        replay_window(info)  # fail fast if there's nothing to replay yet
+        with self._lock:
+            if info.session_id in self._running:
+                return self._running[info.session_id]
+            job = {"status": "running", "session_id": info.session_id,
+                   "started": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+            self._running[info.session_id] = job
+        self._pool.submit(self._run, info)
+        return job
+
+    def _run(self, info: SessionInfo) -> None:
+        try:
+            result = replay_session(info)
+        except Exception as e:  # surfaced to the UI as-is
+            result = {"status": "error", "error": str(e), "session": info.to_dict(),
+                      "generated": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+        try:
+            reconcile_path(info.db).write_text(json.dumps(result, indent=2, default=str))
+        finally:
+            with self._lock:
+                self._running.pop(info.session_id, None)
+
+    def get(self, session_id: str, db: Path) -> Optional[dict]:
+        with self._lock:
+            if session_id in self._running:
+                return self._running[session_id]
+        path = reconcile_path(db)
+        return json.loads(path.read_text()) if path.exists() else None
 
 
 def summarize(outdir: Path, strategy: str) -> dict:
