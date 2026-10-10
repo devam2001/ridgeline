@@ -158,6 +158,10 @@ tr.clickable:hover td { background: var(--surface-2); }
 .gate-list { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 4px; }
 .gate-list li { display: flex; gap: 8px; }
 .gate-list .mark { width: 16px; font-weight: 700; }
+.recon-controls { margin: 12px 0; }
+.recon-controls select { max-width: 100%; }
+.notes { margin: 0 0 14px; padding-left: 18px; color: var(--warn); font-size: 12px; display: grid; gap: 4px; }
+.notes:empty { display: none; }
 .wf-bars { display: flex; gap: 3px; align-items: center; height: 60px; margin-top: 6px; }
 .wf-bar { flex: 1; min-width: 6px; border-radius: 2px; }
 

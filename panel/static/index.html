@@ -80,6 +80,22 @@
         <h2>Closed trades <span class="muted small">(latest 50)</span></h2>
         <div class="table-wrap"><table id="paper-closed"></table></div>
       </div>
+      <div class="card" id="recon-card">
+        <h2>Paper vs replay <span id="recon-verdict" class="pill" hidden></span></h2>
+        <p class="muted small">Replays the exact period a session ran (same strategy, pairs and balance) and matches
+          the trades one by one. The last go-live gate needs 4+ weeks of paper trading with every check passing.</p>
+        <div class="btn-row recon-controls">
+          <select id="recon-session" aria-label="Paper session"></select>
+          <button type="button" class="btn" id="recon-run">Compare with replay</button>
+          <span class="muted small" id="recon-status"></span>
+        </div>
+        <div id="recon-result" hidden>
+          <ul class="gate-list" id="recon-checks"></ul>
+          <div class="tiles" id="recon-tiles"></div>
+          <ul class="notes" id="recon-warnings"></ul>
+          <div class="table-wrap tall"><table id="recon-trades"></table></div>
+        </div>
+      </div>
       <div class="card">
         <h2>Audit log <span id="audit-chain" class="pill"></span></h2>
         <p class="muted small">Every control action and risk event, hash-chained so edits or deletions are detectable.</p>

@@ -1,5 +1,6 @@
 """Panel API: input validation, the dry-run safety guard, and the kill switch."""
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -66,3 +67,71 @@ def test_flatten_sequence_and_audit(client, monkeypatch):
 
 def test_report_rejects_path_tricks(client):
     assert client.get("/api/report", params={"session": "../config"}).status_code == 400
+
+
+# ---------------------------------------------------------------- paper vs replay
+
+@pytest.fixture
+def userdir(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_mod, "USERDIR", tmp_path)
+    (tmp_path / "paper").mkdir(exist_ok=True)
+    return tmp_path
+
+
+def make_session(userdir, session_id, meta=None):
+    import sqlite3
+
+    with sqlite3.connect(userdir / "paper" / f"{session_id}.sqlite") as con:
+        con.execute("CREATE TABLE trades (pair TEXT, strategy TEXT)")
+    con.close()
+    if meta:
+        (userdir / "paper" / f"{session_id}.meta.json").write_text(json.dumps(meta))
+
+
+def test_reconcile_rejects_bad_and_unknown_sessions(client, userdir):
+    assert client.post("/api/paper/sessions/bad.id/reconcile").status_code == 400
+    assert client.get("/api/paper/sessions/20990101-000000/reconcile").status_code == 404
+
+
+def test_reconcile_needs_to_know_the_pairs(client, userdir):
+    make_session(userdir, "s1")
+    r = client.post("/api/paper/sessions/s1/reconcile")
+    assert r.status_code == 409 and "which" in r.json()["detail"]
+
+
+def test_reconcile_submits_what_the_session_ran(client, userdir, monkeypatch):
+    make_session(userdir, "s2", {"strategy": "TrendRider4h", "pairs": ["BTC/USDT"], "balance": 300,
+                                 "started": "2026-09-01T00:00:00+00:00"})
+    submitted = []
+    monkeypatch.setattr(app_mod.session_replays, "submit",
+                        lambda info: submitted.append(info) or {"status": "running", "session_id": info.session_id})
+    assert client.post("/api/paper/sessions/s2/reconcile").json()["status"] == "running"
+    assert (submitted[0].strategy, submitted[0].pairs, submitted[0].balance) == ("TrendRider4h", ["BTC/USDT"], 300)
+    assert client.get("/api/paper/sessions/s2/reconcile").json() == {"status": "none"}
+
+
+def test_research_shows_newest_reconciliation_per_strategy(client, userdir):
+    (userdir / "research").mkdir()
+    (userdir / "research" / "latest.json").write_text(json.dumps({"strategies": {}}))
+
+    def result(session_id, generated, ok, status="done"):
+        return {"status": status, "generated": generated, "close_to_replay": ok,
+                "session": {"session_id": session_id, "strategy": "TrendRider4h"}, "period": {"days": 30.0},
+                "checks": [{"pass": ok}, {"pass": True}]}
+
+    for sid, gen, ok, status in [("old", "2026-10-01T00:00:00+00:00", False, "done"),
+                                 ("new", "2026-10-09T00:00:00+00:00", True, "done"),
+                                 ("broken", "2026-10-10T00:00:00+00:00", True, "error")]:
+        (userdir / "paper" / f"{sid}.reconcile.json").write_text(json.dumps(result(sid, gen, ok, status)))
+    checks = client.get("/api/research").json()["paper_checks"]
+    assert checks["TrendRider4h"]["session_id"] == "new" and checks["TrendRider4h"]["passed"] == 2
+
+
+def test_reconcile_refuses_until_the_first_candle_closes(client, userdir):
+    from datetime import datetime, timezone
+
+    make_session(userdir, "s3", {"strategy": "TrendRider4h", "pairs": ["BTC/USDT"], "balance": 300,
+                                 "started": datetime.now(timezone.utc).isoformat()})
+    r = client.post("/api/paper/sessions/s3/reconcile")
+    assert r.status_code == 409 and "Nothing to replay yet" in r.json()["detail"]
+    assert not (userdir / "paper" / "s3.reconcile.json").exists()
