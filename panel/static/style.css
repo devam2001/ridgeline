@@ -88,6 +88,7 @@ h2 { font-size: 14px; margin: 0 0 12px; }
 }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
 .grid-2 > .card { margin-bottom: 0; }
+.grid-2 > * { min-width: 0; }
 
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
 .kv dt { color: var(--muted); }

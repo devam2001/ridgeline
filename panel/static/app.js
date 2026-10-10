@@ -362,13 +362,13 @@ async function loadResearch() {
           </ul>
         </div>
         <div>
-          <table>
+          <div class="table-wrap"><table>
             <thead><tr><th></th><th class="num">Return</th><th class="num">Max DD</th><th class="num">PF</th><th class="num">Trades</th></tr></thead>
             <tbody>
               ${[["In-sample", s.is], ["Out-of-sample", s.oos], ["OOS, +50% fees", s.stress]].map(([l, m]) =>
                 `<tr><td>${l}</td><td class="num ${signClass(m.profit_pct)}">${fmtPct(m.profit_pct)}</td><td class="num">${m.max_drawdown_pct}%</td><td class="num">${m.profit_factor}</td><td class="num">${m.trades}</td></tr>`).join("")}
             </tbody>
-          </table>
+          </table></div>
           <p class="muted small" style="margin-top:10px">Walk-forward (3-month windows): ${s.walkforward.pct_profitable}% profitable, worst ${fmtPct(s.walkforward.worst_pct)}</p>
           <div class="wf-bars">${bars}</div>
         </div>
