@@ -64,7 +64,7 @@ code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-siz
 .badge { font-size: 11px; font-weight: 600; letter-spacing: 0.03em; padding: 2px 8px; border-radius: 999px; }
 .badge-safe { background: var(--info-bg); color: var(--accent); }
 
-.tabs { display: flex; gap: 4px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; }
 .tab {
   border: 0; background: none; color: var(--muted); font: inherit; font-weight: 500;
   padding: 6px 12px; border-radius: 8px; cursor: pointer;
@@ -155,4 +155,10 @@ tr.clickable:hover td { background: var(--surface-2); }
   .topbar { padding: 10px 16px; }
   main { padding: 16px 16px 40px; }
   .grid-2, .form-row, .form-row-5 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 420px) {
+  .topbar { padding: 8px 12px; }
+  .tab { padding: 6px 8px; }
+  main { padding: 12px 12px 32px; }
 }

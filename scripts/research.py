@@ -7,6 +7,14 @@ Usage (from the project root, with the venv Python):
     python scripts/research.py bias      [-s STRAT ...]   lookahead + recursive analysis
     python scripts/research.py hyperopt  -s STRAT [--epochs N] [--spaces ...]   (IS only)
     python scripts/research.py gates     [-s STRAT ...]   all of the above -> user_data/research/latest.json
+    python scripts/research.py universe  [--download]     show (and fetch data for) the point-in-time pair lists
+
+Pairs are chosen point-in-time: each backtest window trades the top
+UNIVERSE_SIZE USDT pairs by volume over the 30 days BEFORE that window starts.
+Picking pairs by today's volume would favour coins that pumped during the test
+(look-ahead in the universe itself). Pass --static to use config.json's pairs.
+Coins Binance has since delisted can't be downloaded, so some survivorship
+bias remains.
 
 IS (2023-06-01 -> 2025-06-01) is for design and hyperopt. OOS (2025-06-01 ->
 latest data) is only looked at to judge the result - tuning against it would
@@ -15,6 +23,7 @@ make it in-sample too.
 
 import argparse
 import csv
+import functools
 import json
 import re
 import subprocess
@@ -39,6 +48,15 @@ STRESS_FEE = 0.0015  # Binance spot 0.1% + 50%
 RESEARCH_DIR = USERDIR / "research"
 WORKERS = 6
 
+UNIVERSE_SIZE = 25
+UNIVERSE_LOOKBACK_DAYS = 30
+MIN_HISTORY_DAYS = 210  # daily EMA200 warm-up before a pair can be traded
+UNIVERSE_BLACKLIST = re.compile(
+    r"^(USDC|FDUSD|TUSD|USDP|DAI|BUSD|EUR|AEUR|EURI|USDE|USD1|RLUSD|PYUSD|XUSD|BFUSD|"
+    r"PAXG|WBTC|WBETH|BNSOL|.*UP|.*DOWN|.*BULL|.*BEAR)/"
+)
+STATIC_UNIVERSE = False  # set by --static
+
 GATES = [
     # (key, label, comparison, target)
     ("oos_profit_pct", "OOS profit > 0%", ">", 0),
@@ -62,19 +80,50 @@ def config_pairs() -> list[str]:
     return json.loads((USERDIR / "config.json").read_text())["exchange"]["pair_whitelist"]
 
 
+@functools.lru_cache(maxsize=None)
+def universe_at(when: str, n: int = UNIVERSE_SIZE) -> tuple[str, ...]:
+    """Top-n USDT pairs by quote volume over the lookback window before `when`,
+    using only data that existed at that time."""
+    if STATIC_UNIVERSE:
+        return tuple(config_pairs())
+    t = pd.Timestamp(when, tz="UTC")
+    lookback_start = t - pd.Timedelta(days=UNIVERSE_LOOKBACK_DAYS)
+    ranked = []
+    for path in DATADIR.glob("*_USDT-1d.feather"):
+        pair = path.stem.rsplit("-", 1)[0].replace("_", "/")
+        if UNIVERSE_BLACKLIST.match(pair):
+            continue
+        df = pd.read_feather(path, columns=["date", "close", "volume"])
+        if df.empty or df["date"].min() > t - pd.Timedelta(days=MIN_HISTORY_DAYS):
+            continue
+        window = df[(df["date"] >= lookback_start) & (df["date"] < t)]
+        if len(window) < UNIVERSE_LOOKBACK_DAYS - 5:  # must have been trading throughout
+            continue
+        ranked.append((pair, float((window["close"] * window["volume"]).sum())))
+    ranked.sort(key=lambda r: r[1], reverse=True)
+    return tuple(p for p, _ in ranked[:n])
+
+
+def all_universes() -> dict[str, tuple[str, ...]]:
+    end = data_end()
+    starts = {IS_RANGE[0], OOS_START, *(w[0] for w in wf_windows(end))}
+    return {d: universe_at(d) for d in sorted(starts)}
+
+
 def tr(start: str, end: str = "") -> str:
     return f"{start.replace('-', '')}-{end.replace('-', '')}"
 
 
 def bt(strategy, start, end="", tag="", **kw) -> dict:
     out = RESEARCH_DIR / "runs" / f"{strategy}-{tag or tr(start, end)}"
+    kw.setdefault("pairs", list(universe_at(start)))
     return run_backtest(strategy, tr(start, end), outdir=out, **kw)["metrics"]
 
 
-def benchmarks(pairs: list[str], end: str) -> dict:
+def benchmarks(end: str) -> dict:
     out = {}
     for name, (s, e) in {"is": IS_RANGE, "oos": (OOS_START, end)}.items():
-        eq = buy_and_hold(pairs, s, e)
+        eq = buy_and_hold(list(universe_at(s)), s, e)
         btc = buy_and_hold(["BTC/USDT"], s, e)
         out[name] = {
             "equal_weight_pct": round((eq["benchmark"].iloc[-1] - 1) * 100, 2),
@@ -200,12 +249,17 @@ def gates(strategies: list[str]) -> dict:
     wf = walkforward(strategies)
     st = stress(strategies)
     bs = bias(strategies)
-    pairs = config_pairs()
 
     report = {
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "periods": {"is": list(IS_RANGE), "oos": [OOS_START, end]},
-        "benchmarks": benchmarks(pairs, end),
+        "benchmarks": benchmarks(end),
+        "universe": {
+            "method": "static (config.json)" if STATIC_UNIVERSE else
+                      f"point-in-time top {UNIVERSE_SIZE} by {UNIVERSE_LOOKBACK_DAYS}d volume",
+            "is": list(universe_at(IS_RANGE[0])),
+            "oos": list(universe_at(OOS_START)),
+        },
         "strategies": {},
     }
     for s in strategies:
@@ -243,19 +297,34 @@ def print_metrics_table(rows: list[tuple[str, dict]]) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["baseline", "walkforward", "stress", "bias", "hyperopt", "gates"])
+    ap.add_argument("command", choices=["baseline", "walkforward", "stress", "bias", "hyperopt", "gates", "universe"])
     ap.add_argument("-s", "--strategies", nargs="+", default=None)
     ap.add_argument("--epochs", type=int, default=300)
     ap.add_argument("--spaces", nargs="+", default=["buy", "sell"])
     ap.add_argument("--loss", default="CalmarHyperOptLoss")
+    ap.add_argument("--static", action="store_true", help="use config.json pairs instead of point-in-time universes")
+    ap.add_argument("--download", action="store_true", help="with 'universe': download 1h/4h data for every listed pair")
     args = ap.parse_args()
+    global STATIC_UNIVERSE
+    STATIC_UNIVERSE = args.static
     strategies = args.strategies or list_strategies()
+
+    if args.command == "universe":
+        universes = all_universes()
+        for d, pairs in universes.items():
+            print(f"{d}: {' '.join(p.split('/')[0] for p in pairs)}")
+        union = sorted({p for pairs in universes.values() for p in pairs})
+        print(f"\n{len(union)} distinct pairs across all windows")
+        print(f"today ({data_end()}): {' '.join(p.split('/')[0] for p in universe_at(data_end()))}")
+        if args.download:
+            subprocess.run([*FREQTRADE, "download-data", *config_args(), "--pairs", *union,
+                            "--timeframes", "1h", "4h", "1d", "--timerange", "20220601-"], check=True)
+        return
 
     if args.command == "baseline":
         res = baseline(strategies)
         print_metrics_table([(f"{s} {p.upper()}", m) for (s, p), m in res.items()])
-        print("\nbenchmarks:", json.dumps(benchmarks(
-            json.loads((USERDIR / "config.json").read_text())["exchange"]["pair_whitelist"], data_end())))
+        print("\nbenchmarks:", json.dumps(benchmarks(data_end())))
     elif args.command == "walkforward":
         for s, r in walkforward(strategies).items():
             print(f"\n{s}: {r['pct_profitable']}% of windows profitable, worst {r['worst_pct']}%")
