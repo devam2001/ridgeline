@@ -31,7 +31,9 @@ if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 New-Item -ItemType Directory -Force $stage | Out-Null
 
 # 1. Private Python with every dependency and FreqUI.
-Copy-Item -Recurse (Join-Path $Python "*") (Join-Path $stage "python")
+# Copy the folder itself: copying "<folder>\*" into a path that doesn't exist
+# yet turns the first FILE into that path and then fails on the subfolders.
+Copy-Item -Recurse $Python (Join-Path $stage "python")
 $py = Join-Path $stage "python\python.exe"
 & $py -m pip install --disable-pip-version-check --no-warn-script-location -r (Join-Path $root "requirements.txt")
 if ($LASTEXITCODE) { throw "pip install failed" }

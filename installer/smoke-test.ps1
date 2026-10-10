@@ -26,7 +26,7 @@ try {
     & $py -m freqtrade list-strategies --userdir user_data -c user_data\config.json
     if ($LASTEXITCODE) { throw "strategies failed to load" }
 
-    $panel = Start-Process -PassThru -NoNewWindow $py -ArgumentList "-m", "uvicorn", "panel.app:app", "--host", "127.0.0.1", "--port", "8090"
+    $panel = Start-Process -PassThru -NoNewWindow -WorkingDirectory $dir $py -ArgumentList "-m", "uvicorn", "panel.app:app", "--host", "127.0.0.1", "--port", "8090"
     try {
         $strategies = $null
         for ($i = 0; $i -lt 45 -and -not $strategies; $i++) {
@@ -47,7 +47,8 @@ finally {
 
 $uninstall = Start-Process -Wait -PassThru (Join-Path $dir "unins000.exe") -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"
 if ($uninstall.ExitCode) { throw "uninstaller exited with $($uninstall.ExitCode)" }
-Start-Sleep -Seconds 3  # the uninstaller finishes in a helper process
+# The uninstaller hands over to a helper process and returns early: wait for it.
+for ($i = 0; $i -lt 60 -and (Test-Path (Join-Path $dir "python")); $i++) { Start-Sleep -Seconds 2 }
 if (Test-Path (Join-Path $dir "python")) { throw "uninstall left the Python environment behind" }
 if (-not (Test-Path (Join-Path $dir "user_data\config.private.json"))) { throw "uninstall removed the private config" }
 Write-Host "install, panel and uninstall ok"

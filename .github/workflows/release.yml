@@ -43,6 +43,14 @@ jobs:
           }
           "VERSION=$v" >> $env:GITHUB_ENV
 
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue) -and -not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y
+          }
+
       - name: Build installer
         shell: pwsh
         run: ./installer/build.ps1 -Python (Split-Path (Get-Command python).Source) -Version $env:VERSION

@@ -27,8 +27,8 @@ AppSupportURL=https://github.com/devam2001/ridgeline/issues
 DefaultDirName={localappdata}\Programs\Ridgeline
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
+ArchitecturesAllowed=x64
+ArchitecturesInstallIn64BitMode=x64
 OutputDir={#OutputDir}
 OutputBaseFilename=Ridgeline-Setup-{#AppVersion}
 Compression=lzma2/ultra64
@@ -46,7 +46,7 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Type: filesandordirs; Name: "{app}\python"
 
 [Files]
-Source: "{#StageDir}\*"; DestDir: "{app}"; Excludes: "user_data\config.json"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "{#StageDir}\*"; DestDir: "{app}"; Excludes: "\user_data\config.json"; Flags: recursesubdirs createallsubdirs ignoreversion
 ; config.json holds your live pair list and settings: install it once, never overwrite it.
 Source: "{#StageDir}\user_data\config.json"; DestDir: "{app}\user_data"; Flags: onlyifdoesntexist uninsneveruninstall
 
