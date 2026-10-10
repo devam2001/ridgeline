@@ -13,3 +13,7 @@ user_data/hyperopt_results/
 user_data/research/runs/
 user_data/research/bias/
 user_data/plot/
+
+# Word documents stay local; publish PDFs instead
+*.docx
+~$*.docx
