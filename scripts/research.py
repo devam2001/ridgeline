@@ -58,6 +58,7 @@ UNIVERSE_BLACKLIST = re.compile(
     r"PAXG|WBTC|WBETH|BNSOL|.*UP|.*DOWN|.*BULL|.*BEAR)/"
 )
 STATIC_UNIVERSE = False  # set by --static
+BALANCE = 1000.0  # set by --balance; 65 USDT is about 100 AUD
 
 GATES = [
     # (key, label, comparison, target)
@@ -124,6 +125,9 @@ def tr(start: str, end: str = "") -> str:
 def bt(strategy, start, end="", tag="", **kw) -> dict:
     out = RESEARCH_DIR / "runs" / f"{strategy}-{tag or tr(start, end)}"
     kw.setdefault("pairs", list(universe_at(start)))
+    kw.setdefault("balance", BALANCE)
+    if BALANCE != 1000:
+        out = out.with_name(f"{out.name}-bal{BALANCE:g}")
     return run_backtest(strategy, tr(start, end), outdir=out, **kw)["metrics"]
 
 
@@ -181,7 +185,66 @@ def stress(strategies: list[str]) -> dict:
         return {s: f.result() for s, f in futures.items()}
 
 
+def is_cross_sectional(strategy: str) -> bool:
+    """Strategies whose signals depend on other pairs (e.g. a ranking) say so
+    with `cross_sectional = True`."""
+    source = (USERDIR / "strategies" / f"{strategy}.py").read_text(encoding="utf-8")
+    return re.search(r"^\s+cross_sectional\s*=\s*True", source, re.M) is not None
+
+
+TRUNCATION_RANGE = ("2024-01-01", "2025-01-01")
+TRUNCATION_CUTS = ("2024-04-01", "2024-07-01", "2024-10-01")
+
+
+def truncation_check(strategy: str) -> dict:
+    """Lookahead check that keeps every pair loaded: backtest the full range,
+    then the same start with later data removed (from all pairs at once).
+    Every trade that closed before the cut must be identical in both."""
+    start, end = TRUNCATION_RANGE
+    pairs = list(universe_at(start))
+    full = bt(strategy, start, end, tag="bias-full", pairs=pairs)
+    with ThreadPoolExecutor(WORKERS) as pool:
+        cuts = {c: pool.submit(bt, strategy, start, c, tag=f"bias-cut-{c}", pairs=pairs) for c in TRUNCATION_CUTS}
+    keys = ("pair", "open_date", "close_date", "open_rate", "close_rate")
+
+    def closed_before(trades, cut):
+        # The cut run force-closes whatever is still open on its last candle,
+        # so only compare trades that closed two days before the cut.
+        limit = (pd.Timestamp(cut) - pd.Timedelta(days=2)).strftime("%Y-%m-%d")
+        return [tuple(t[k] for k in keys) for t in trades if t["close_date"] < limit]
+
+    full_trades = run_trades(strategy, "bias-full")
+    checked, mismatched = 0, []
+    for c in cuts:
+        cuts[c].result()
+        want = closed_before(full_trades, c)
+        got = closed_before(run_trades(strategy, f"bias-cut-{c}"), c)
+        checked += len(want)
+        if want != got:
+            mismatched.append(c)
+    return {
+        "lookahead_clean": not mismatched and checked > 0,
+        "lookahead_note": f"cross-sectional: {checked} trades compared with later data removed from all pairs "
+                          f"({full['trades']} in the full run); "
+                          + (f"differences at cuts {', '.join(mismatched)}" if mismatched else "no differences"),
+    }
+
+
+def run_trades(strategy: str, tag: str) -> list[dict]:
+    from freqtrade.data.btanalysis import load_backtest_stats
+
+    out = RESEARCH_DIR / "runs" / f"{strategy}-{tag}"
+    if BALANCE != 1000:
+        out = out.with_name(f"{out.name}-bal{BALANCE:g}")
+    trades = load_backtest_stats(out)["strategy"][strategy]["trades"]
+    return [{**t, "open_date": str(t["open_date"]), "close_date": str(t["close_date"])} for t in trades]
+
+
 def lookahead(strategy: str) -> dict:
+    # Freqtrade's lookahead-analysis re-runs each signal with only that one
+    # pair loaded, so a cross-sectional ranking always looks "biased" there.
+    if is_cross_sectional(strategy):
+        return truncation_check(strategy)
     out = RESEARCH_DIR / "bias" / strategy
     out.mkdir(parents=True, exist_ok=True)
     csv_path = out / "lookahead.csv"
@@ -288,9 +351,11 @@ def gates(strategies: list[str]) -> dict:
             "gates": results,
             "eligible_for_paper": all(g["pass"] for g in results),
         }
+    report["balance"] = BALANCE
     RESEARCH_DIR.mkdir(parents=True, exist_ok=True)
     stamp = date.today().isoformat()
-    for name in ("latest.json", f"report-{stamp}.json"):
+    names = ("latest.json", f"report-{stamp}.json") if BALANCE == 1000 else (f"latest-{BALANCE:g}.json",)
+    for name in names:
         (RESEARCH_DIR / name).write_text(json.dumps(report, indent=2, default=str))
     return report
 
@@ -310,12 +375,16 @@ def main() -> None:
     ap.add_argument("--spaces", nargs="+", default=["buy", "sell"])
     ap.add_argument("--loss", default="CalmarHyperOptLoss")
     ap.add_argument("--static", action="store_true", help="use config.json pairs instead of point-in-time universes")
+    ap.add_argument("--balance", type=float, default=1000.0,
+                    help="starting balance for backtests (65 USDT is about 100 AUD); gates then writes "
+                         "latest-<balance>.json instead of latest.json")
     ap.add_argument("--download", action="store_true", help="with 'universe': download 1h/4h data for every listed pair")
     ap.add_argument("--write-config", action="store_true",
                     help="with 'universe': set config.json's pair_whitelist to today's universe (for paper/live)")
     args = ap.parse_args()
-    global STATIC_UNIVERSE
+    global STATIC_UNIVERSE, BALANCE
     STATIC_UNIVERSE = args.static
+    BALANCE = args.balance
     strategies = args.strategies or list_strategies()
 
     if args.command == "universe":
