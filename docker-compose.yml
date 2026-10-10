@@ -1,7 +1,12 @@
 # 24/7 deployment: trading bot + monitor-mode panel + watchdog.
 #
 #   python scripts/init_private_config.py   # once: API secrets (gitignored)
-#   docker compose up -d --build
+#   docker compose up -d --build            # build from this checkout, or:
+#   docker compose pull && docker compose up -d   # use the released image
+#
+# The code comes from the image; only user_data/ (config, strategies, data,
+# databases, logs, audit trail) is mounted from the host. RIDGELINE_VERSION
+# picks a released image tag (default: latest).
 #
 # Trades in whatever mode user_data/config.json says - dry_run: true (paper)
 # unless you deliberately change it. Ports are published on 127.0.0.1 only;
@@ -9,10 +14,10 @@
 
 x-ridgeline: &ridgeline
   build: .
-  image: ridgeline:latest
+  image: ghcr.io/devam2001/ridgeline:${RIDGELINE_VERSION:-latest}
   restart: unless-stopped
   volumes:
-    - .:/ridgeline
+    - ./user_data:/ridgeline/user_data
   working_dir: /ridgeline
   logging:
     driver: json-file

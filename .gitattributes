@@ -1,0 +1,5 @@
+# Windows scripts need CRLF line endings to run reliably from cmd/PowerShell.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.iss text eol=crlf

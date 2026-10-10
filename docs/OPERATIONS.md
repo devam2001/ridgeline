@@ -106,9 +106,15 @@ sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 git
 git clone https://github.com/devam2001/ridgeline.git && cd ridgeline
 python3 scripts/init_private_config.py      # API secrets; then add Telegram keys
 mkdir -p user_data/logs && sudo chown -R 1000:1000 user_data   # the image runs as uid 1000
-docker compose up -d --build
+docker compose pull                          # the released image, ghcr.io/devam2001/ridgeline
+docker compose up -d                         # (or: docker compose up -d --build to build from the checkout)
 docker compose ps                            # bot should become "healthy" within ~3 min
 ```
+
+The image contains the code. Only `user_data/` is mounted from the host:
+config, strategies, data, databases, logs and the audit trail. To pin a
+release, set `RIDGELINE_VERSION=0.1.0` (in `.env` or the shell). The default
+is `latest`.
 
 Data and the strategy's pair list (see the README's Data section) can be
 downloaded inside the container:
@@ -135,7 +141,8 @@ Then the panel is at http://127.0.0.1:8090 and FreqUI at http://127.0.0.1:8080.
 
 **Updating:**
 ```bash
-git pull && docker compose up -d --build
+git pull && docker compose pull && docker compose up -d     # released image
+git pull && docker compose up -d --build                    # or build from the checkout
 ```
 
 ## Incident checklist

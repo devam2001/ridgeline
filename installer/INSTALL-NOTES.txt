@@ -1,0 +1,23 @@
+Ridgeline - paper-trading bot, research pipeline and control panel
+
+PAPER MONEY ONLY. The panel runs Freqtrade in dry-run mode with a fake
+wallet. It cannot start a live bot, and nothing it does reaches your
+exchange account.
+
+After installing:
+  1. Start "Ridgeline" from the Start menu or desktop. The panel opens at
+     http://127.0.0.1:8090 in your browser.
+  2. Paper trading works straight away: pick a starting balance and a
+     strategy, then press Start.
+  3. Replay and research need historical candles. Run "Update market data"
+     from the Start menu once (it downloads several GB), then monthly.
+
+Your files live in the install folder's user_data\ directory:
+  - config.private.json: your own API credentials, created on first start
+  - paper\: paper-trading sessions
+  - data\: downloaded candles
+  - audit\: the audit trail
+They are kept when you upgrade or uninstall.
+
+Backtests and paper results are not a promise of future profits. This is
+software, not financial advice. Only ever risk money you can afford to lose.
