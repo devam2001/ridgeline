@@ -13,23 +13,31 @@
 # Mean reversion has a high win rate and small average wins, so it is very
 # fee-sensitive - always check the fee stress test before trusting it.
 
+import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import talib.abstract as ta
-from pandas import DataFrame
-
 from freqtrade.persistence import Trade
 from freqtrade.strategy import (
     DecimalParameter,
     IntParameter,
-    IStrategy,
     informative,
     stoploss_from_open,
 )
+from pandas import DataFrame
+
+# Shared ridgeline package (portfolio risk limits, audit log) lives at the
+# project root; Freqtrade only puts this strategies folder on the import path.
+_ROOT = str(Path(__file__).resolve().parents[2])
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
+from ridgeline.freqtrade_risk import RiskMixin  # noqa: E402
 
 
-class TrendDipBuyer1h(IStrategy):
+class TrendDipBuyer1h(RiskMixin):
     INTERFACE_VERSION = 3
 
     timeframe = "1h"
@@ -154,7 +162,8 @@ class TrendDipBuyer1h(IStrategy):
         stake = total_equity * self.risk_per_trade / distance
         if min_stake is not None:
             stake = max(stake, min_stake)
-        return min(stake, max_stake)
+        stake = min(stake, max_stake)
+        return self.apply_risk_caps(pair, stake, distance, current_time, min_stake)
 
     def custom_stoploss(
         self,

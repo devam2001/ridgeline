@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install "freqtrade==2026.8" "joblib<1.6" -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Throwaway private config
+        run: python scripts/init_private_config.py
+
+      - name: Strategies load
+        run: freqtrade list-strategies --userdir user_data -c user_data/config.json
+
+      - name: Tests
+        run: pytest

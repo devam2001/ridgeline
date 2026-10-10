@@ -1,17 +1,20 @@
 # Control panel: paper trading (dummy money), fast historical replay, and
 # research results. Run with start-panel.ps1, then open http://127.0.0.1:8090
 
+import re
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from panel.bot import PaperBot, PaperBotError
+from panel.bot import MONITOR_MODE, PaperBot, PaperBotError
 from panel.common import USERDIR, list_strategies, load_json
-from panel.replay import ReplayJobs
+from panel.replay import REPLAY_DIR, ReplayJobs
+from ridgeline import audit
+from ridgeline.report import build_tearsheet, load_trades_backtest, load_trades_db, session_balance
 
 STATIC = Path(__file__).parent / "static"
 
@@ -30,6 +33,10 @@ class PaperStart(BaseModel):
 class PaperReset(BaseModel):
     balance: float = Field(gt=0, le=10_000_000)
     strategy: Optional[str] = None
+
+
+class FlattenRequest(BaseModel):
+    confirm: str
 
 
 class ReplayRequest(BaseModel):
@@ -89,6 +96,90 @@ def paper_reset(req: PaperReset):
         return bot.reset(req.balance, req.strategy)
     except PaperBotError as e:
         raise HTTPException(409, str(e))
+
+
+@app.get("/api/mode")
+def mode():
+    return {"monitor": MONITOR_MODE}
+
+
+@app.get("/api/risk")
+def risk_status():
+    try:
+        return bot.risk_status()
+    except PaperBotError as e:
+        raise HTTPException(503, str(e))
+
+
+@app.post("/api/bot/pause")
+def bot_pause():
+    try:
+        return bot.pause()
+    except PaperBotError as e:
+        raise HTTPException(409, str(e))
+
+
+@app.post("/api/bot/resume")
+def bot_resume():
+    try:
+        return bot.resume()
+    except PaperBotError as e:
+        raise HTTPException(409, str(e))
+
+
+@app.post("/api/bot/flatten")
+def bot_flatten(req: FlattenRequest):
+    if req.confirm != "FLATTEN":
+        raise HTTPException(400, 'Type FLATTEN to confirm closing every position.')
+    try:
+        return bot.flatten()
+    except PaperBotError as e:
+        raise HTTPException(409, str(e))
+
+
+def _valid_id(value: str) -> str:
+    if not re.fullmatch(r"[\w-]+", value):
+        raise HTTPException(400, "Invalid id")
+    return value
+
+
+def _valid_month(month: Optional[str]) -> Optional[str]:
+    if month and not re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(400, "month must be YYYY-MM")
+    return month or None
+
+
+@app.get("/api/report", response_class=HTMLResponse)
+def paper_report(session: str, month: Optional[str] = None):
+    db = USERDIR / "paper" / f"{_valid_id(session)}.sqlite"
+    if not db.exists():
+        raise HTTPException(404, "No such paper session")
+    try:
+        trades = load_trades_db(db)
+        return build_tearsheet(trades, session_balance(db), title="Ridgeline - paper trading report",
+                               source_label=f"session {session}", month=_valid_month(month), mode="paper")
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+@app.get("/api/replay/{job_id}/report", response_class=HTMLResponse)
+def replay_report(job_id: str):
+    directory = REPLAY_DIR / _valid_id(job_id)
+    if not (directory / "job.json").exists():
+        raise HTTPException(404, "No such replay")
+    try:
+        trades, balance = load_trades_backtest(directory)
+        job = replays.get(job_id) or {}
+        return build_tearsheet(trades, balance, title=f"Ridgeline - {job.get('strategy', 'replay')} replay",
+                               source_label=f"replay {job_id}", mode="backtest")
+    except (ValueError, KeyError, StopIteration) as e:
+        raise HTTPException(409, f"No report for this replay: {e}")
+
+
+@app.get("/api/audit")
+def audit_log(limit: int = 100):
+    ok, problem = audit.verify()
+    return {"chain_ok": ok, "problem": problem, "events": audit.tail(min(max(limit, 1), 1000))}
 
 
 @app.post("/api/replay")

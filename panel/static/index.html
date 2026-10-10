@@ -59,6 +59,17 @@
         </form>
       </div>
 
+      <div class="card" id="risk-card">
+        <h2>Risk controls <span id="risk-halt" class="pill" hidden></span></h2>
+        <div class="meters" id="risk-meters"><p class="muted small">Available while a bot is running.</p></div>
+        <div class="btn-row">
+          <button type="button" class="btn" id="risk-pause" title="Stop opening new trades. Open trades keep their stops and exits.">Pause entries</button>
+          <button type="button" class="btn" id="risk-resume" title="Resume trading. Also clears a drawdown halt - only after you've reviewed why it happened.">Resume</button>
+          <button type="button" class="btn btn-danger" id="risk-flatten" title="Kill switch: stop entries, market-close every position, stop the bot.">Flatten all</button>
+          <span class="muted small" id="risk-note"></span>
+        </div>
+      </div>
+
       <div class="tiles" id="paper-tiles"></div>
 
       <div class="card">
@@ -68,6 +79,11 @@
       <div class="card">
         <h2>Closed trades <span class="muted small">(latest 50)</span></h2>
         <div class="table-wrap"><table id="paper-closed"></table></div>
+      </div>
+      <div class="card">
+        <h2>Audit log <span id="audit-chain" class="pill"></span></h2>
+        <p class="muted small">Every control action and risk event, hash-chained so edits or deletions are detectable.</p>
+        <div class="table-wrap tall"><table id="audit-table"></table></div>
       </div>
     </section>
 

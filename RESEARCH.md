@@ -6,6 +6,9 @@
 **Setup**
 - Long-only Binance spot, starting with $1,000, at most 3 trades open at once.
 - 0.1% fee per trade, and protections switched on.
+- **The portfolio risk limits are applied**, exactly as in paper and live
+  trading: 35% max position, 4.5% max open risk, 3% daily loss limit, 15%
+  drawdown halt. See `docs/OPERATIONS.md`.
 - **In-sample (IS):** 2023-06-01 → 2025-06-01. Used for design and hyperopt.
 - **Out-of-sample (OOS):** 2025-06-01 → 2026-10-10. Never used for tuning.
 - **Pairs are chosen point-in-time.** Each window trades the top 25 USDT pairs
@@ -24,9 +27,24 @@
 
 | Strategy | IS return | OOS return | OOS max DD | OOS profit factor | OOS trades | Walk-forward | Gates |
 |---|---|---|---|---|---|---|---|
-| **TrendRider4h** | +10.8% | **+19.3%** | **9.8%** | **1.47** | 99 | 71% | **8 / 9** |
-| EmaRsiMomentum | +13.6% | +8.0% | 16.5% | 1.18 | 77 | 43% | 5 / 9 |
-| TrendDipBuyer1h | −20.7% | −17.7% | 19.5% | 0.75 | 309 | 36% | 3 / 9 |
+| **TrendRider4h** | +5.6% | **+17.3%** | **9.8%** | **1.43** | 99 | 64% | **8 / 9** |
+| EmaRsiMomentum | +7.7% | +5.1% | 18.1% | 1.13 | 74 | 43% | 6 / 9 |
+| TrendDipBuyer1h | −8.0% | −17.8% | 19.2% | 0.73 | 300 | 36% | 4 / 9 |
+
+### What the risk limits changed
+
+| | Without limits | With limits |
+|---|---|---|
+| TrendRider4h, OOS | +19.3% | **+17.3%** |
+| TrendRider4h, IS | +10.8% | +5.6% |
+| TrendRider4h, walk-forward | 71% | 64% |
+| TrendDipBuyer1h, IS | −20.7% | **−8.0%** |
+
+The limits **cost return on the good strategy**. The 35% position cap blocks
+the large positions that risk-based sizing wants in low-volatility coins
+(BTC, BNB, TRX). The limits **cut losses on the bad strategy**: the drawdown
+halt more than halved TrendDipBuyer1h's in-sample loss. That trade-off is
+the point of a risk layer.
 
 **No strategy is eligible for real money yet.**
 
@@ -42,14 +60,15 @@ the next monthly re-run will settle it either way.
    - Ranking by today's volume favours coins that pumped during the test.
    - QNT (+133% in OOS) alone added +$210 from 5 trades.
    - ZEC (+2,171%) pushed the equal-weight benchmark to +68%.
-3. **Point-in-time top 25 (this run).** OOS +19.3%, IS +10.8%.
+3. **Point-in-time top 25 (this run).** OOS +19.3%, IS +10.8% before the risk
+   limits; +17.3% and +5.6% with them.
    - Pairs are chosen only from information available at the time.
 
 The gap between the IS results is the most important finding:
-- **+82.5% on the hand-picked pairs vs +10.8% point-in-time.** TrendRider4h
-  was hyperopted on the 15 hand-picked pairs, and a large part of that IS
-  result came from fitting those particular coins.
-- **The OOS result barely moved (+21% → +19%).** It's the more trustworthy
+- **+82.5% on the hand-picked pairs vs +10.8% point-in-time** (both without
+  risk limits). TrendRider4h was hyperopted on the 15 hand-picked pairs,
+  and a large part of that IS result came from fitting those particular coins.
+- **The OOS result barely moved (+21% → +19% before risk limits).** It's the more trustworthy
   number, but expect live results below even that.
 
 ## TrendRider4h in detail
@@ -61,15 +80,16 @@ The gap between the IS results is the most important finding:
   |---|---|---|
   | 2024-06 → 09 | −5.5% | −38% |
   | 2024-12 → 2025-03 | +0.6% | −41% |
-  | 2025-09 → 12 | +0.7% | −43% |
+  | 2025-09 → 12 | −0.9% | −43% |
   | 2025-12 → 2026-03 | 0.0%, no trades (BTC filter) | −31% |
-  | 2024-09 → 12 | +30.3% | +98% |
+  | 2024-09 → 12 | +30.7% | +98% |
 
   In bull runs it catches only part of the move, as the last row shows.
-- **Walk-forward:** profitable in 10 of 14 windows (71%), or 4 of 6 OOS-only.
-  Zero-trade windows don't count as wins. The worst window was −7.0%.
+- **Walk-forward (with risk limits):** profitable in 9 of 14 windows (64%),
+  or 3 of 6 OOS-only. Zero-trade windows don't count as wins. The worst
+  window was −7.0%.
 - **Robustness:**
-  - Still +17.3% OOS with fees raised by half.
+  - Still +15.4% OOS with fees raised by half.
   - Freqtrade's lookahead check finds no bias.
   - Indicators are stable whatever the warm-up length (worst deviation 0.2%).
   - 4h vs 1h intra-candle detail gives near-identical results (+35.7% vs
@@ -77,8 +97,8 @@ The gap between the IS results is the most important finding:
 - **It trades rarely:** 5–7 trades a month. The stats are noisy at this sample size.
 
 ### The other two
-- **EmaRsiMomentum** improves with point-in-time pairs (+8% OOS) but is
-  inconsistent: profitable in only 43% of windows, with a profit factor of 1.18.
+- **EmaRsiMomentum** is positive OOS (+5.1%) but inconsistent: profitable
+  in only 43% of windows, with a profit factor of 1.13.
 - **TrendDipBuyer1h** loses money in every configuration tested.
 
 ## Known limitations

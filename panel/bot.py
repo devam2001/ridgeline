@@ -6,6 +6,14 @@
 # Safety: every bot started here gets a session config, loaded LAST so it
 # wins, with dry_run forced on and exchange keys blanked, and the resolved
 # config is checked before launch. This module cannot start a live bot.
+#
+# Risk controls (pause / resume / flatten) talk to whichever bot answers on
+# the API port - panel-managed, started by hand, or the Docker `bot` service -
+# and every control action is written to the audit log.
+#
+# PANEL_MODE=monitor (used in Docker) disables process start/stop/reset: the
+# container runtime owns the bot process there. RIDGELINE_BOT_URL overrides
+# the bot's API address.
 
 import json
 import os
@@ -20,6 +28,10 @@ import httpx
 import psutil
 
 from panel.common import FREQTRADE, ROOT, USERDIR, config_args, load_json, merged_config
+from ridgeline import audit
+from ridgeline.risk import RiskLimits, build_state, limits_summary, load_halt, set_halt
+
+MONITOR_MODE = os.environ.get("PANEL_MODE", "").lower() == "monitor"
 
 PAPER_DIR = USERDIR / "paper"
 STATE_FILE = PAPER_DIR / "state.json"
@@ -33,11 +45,14 @@ def _api_settings() -> tuple[str, tuple[str, str]]:
     api = merged_config().get("api_server", {})
     host = api.get("listen_ip_address", "127.0.0.1")
     port = api.get("listen_port", 8080)
-    return f"http://{host}:{port}", (api.get("username", ""), api.get("password", ""))
+    if host in ("0.0.0.0", "::"):
+        host = "127.0.0.1"
+    url = os.environ.get("RIDGELINE_BOT_URL") or f"http://{host}:{port}"
+    return url.rstrip("/"), (api.get("username", ""), api.get("password", ""))
 
 
 def _port_open(url: str) -> bool:
-    host, port = url.split("//")[1].split(":")
+    host, port = url.split("//")[1].split("/")[0].split(":")
     with socket.socket() as s:
         s.settimeout(0.5)
         return s.connect_ex((host, int(port))) == 0
@@ -72,6 +87,8 @@ class PaperBot:
     # --- actions ---
 
     def start(self, balance: float, strategy: str) -> dict:
+        if MONITOR_MODE:
+            raise PaperBotError("Process control is disabled in monitor mode (Docker manages the bot).")
         if balance <= 0:
             raise PaperBotError("Starting balance must be positive.")
         if self._our_process():
@@ -116,6 +133,8 @@ class PaperBot:
             "started": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
         self._save_state(state)
+        audit.append("paper_session_started", "panel",
+                     {"session_id": session_id, "strategy": strategy, "balance": balance})
         return state
 
     def _verify_dry_run(self, args: list[str]) -> None:
@@ -126,6 +145,8 @@ class PaperBot:
                                 + out.stderr[-1500:])
 
     def stop(self) -> dict:
+        if MONITOR_MODE:
+            raise PaperBotError("Process control is disabled in monitor mode (Docker manages the bot).")
         proc = self._our_process()
         if not proc:
             raise PaperBotError("No panel-managed paper session is running.")
@@ -153,6 +174,7 @@ class PaperBot:
         state = self._state()
         state.update(pid=None, stopped=datetime.now(timezone.utc).isoformat(timespec="seconds"))
         self._save_state(state)
+        audit.append("paper_session_stopped", "panel", {"session_id": state.get("session_id")})
         return state
 
     def reset(self, balance: float, strategy: Optional[str] = None) -> dict:
@@ -167,6 +189,75 @@ class PaperBot:
                     break
                 time.sleep(0.5)
         return self.start(balance, strategy)
+
+    # --- risk controls (any bot reachable on the API port) ---
+
+    def _call(self, method: str, path: str, **kw):
+        try:
+            r = httpx.request(method, f"{self.base_url}/api/v1/{path}", auth=self.auth, timeout=20, **kw)
+            r.raise_for_status()
+            return r.json()
+        except httpx.HTTPStatusError as e:
+            raise PaperBotError(f"Bot API refused {path}: HTTP {e.response.status_code}") from e
+        except httpx.HTTPError as e:
+            raise PaperBotError(f"Bot API not reachable ({type(e).__name__})") from e
+
+    def pause(self) -> dict:
+        """Stop opening new trades; open trades keep their stops and exits."""
+        result = self._call("POST", "stopentry")
+        audit.append("entries_paused", "panel", {"bot_reply": result})
+        return result
+
+    def resume(self) -> dict:
+        """Resume trading and clear a drawdown halt (after human review)."""
+        was = load_halt()
+        result = self._call("POST", "start")
+        set_halt(False, reason="resumed from panel")
+        audit.append("trading_resumed", "panel", {"bot_reply": result, "cleared_halt": bool(was.get("halted"))})
+        return result
+
+    def flatten(self, wait_s: float = 60) -> dict:
+        """Kill switch: stop entries, market-close every position, stop the bot."""
+        steps = {"stopentry": self._call("POST", "stopentry")}
+        open_before = len(self._call("GET", "status"))
+        steps["forceexit"] = self._call("POST", "forceexit", json={"tradeid": "all"})
+        deadline = time.monotonic() + wait_s
+        remaining = open_before
+        while time.monotonic() < deadline:
+            remaining = len(self._call("GET", "status"))
+            if remaining == 0:
+                break
+            time.sleep(1)
+        steps["stop"] = self._call("POST", "stop")
+        result = {"closed": open_before - remaining, "still_open": remaining, "steps": steps}
+        audit.append("flatten", "panel", result)
+        if remaining:
+            raise PaperBotError(f"Flatten: {remaining} position(s) still open after {wait_s:.0f}s - "
+                                "check the exchange/FreqUI and close them manually.")
+        return result
+
+    def risk_status(self) -> dict:
+        """Same portfolio numbers the strategy enforces, rebuilt from the API."""
+        cfg = self._call("GET", "show_config")
+        # Ask the bot itself (a bot started elsewhere may not match local
+        # state.json). starting_capital is what the strategy's RiskMixin uses
+        # too (Wallets.get_starting_balance, net of tradable_balance_ratio).
+        start = float(self._call("GET", "balance").get("starting_capital") or 0)
+        closed = [
+            (datetime.fromtimestamp(t["close_timestamp"] / 1000, timezone.utc), t.get("profit_abs") or 0.0)
+            for t in self._call("GET", "trades?limit=500").get("trades", [])
+            if not t.get("is_open") and t.get("close_timestamp")
+        ]
+        open_positions = [
+            (t["open_rate"], t.get("stop_loss_abs") or 0.0, t["amount"], t.get("profit_abs") or 0.0)
+            for t in self._call("GET", "status")
+        ]
+        halt = load_halt()
+        reset = datetime.fromisoformat(halt["resumed_at"]) if halt.get("resumed_at") else None
+        state = build_state(start, closed, open_positions, datetime.now(timezone.utc), reset)
+        limits = RiskLimits.from_config(merged_config())
+        return {**limits_summary(state, limits), "equity": round(state.equity, 2),
+                "halt": halt, "bot_state": cfg.get("state")}
 
     # --- status ---
 

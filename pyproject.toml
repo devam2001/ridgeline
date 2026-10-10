@@ -1,0 +1,24 @@
+[project]
+name = "ridgeline"
+version = "0.1.0"
+description = "Freqtrade crypto bot with paper trading, point-in-time research gates, risk controls and reporting"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 130
+target-version = "py311"
+extend-exclude = [".venv", "user_data/hyperopts", "user_data/notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E731"]  # small lambdas for axis formatters read fine
+
+[tool.ruff.lint.per-file-ignores]
+"ridgeline/report.py" = ["E501"]  # the HTML/CSS template reads better unwrapped
+
+[tool.ruff.lint.isort]
+known-first-party = ["ridgeline", "panel", "research", "conftest"]
