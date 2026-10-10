@@ -1,0 +1,38 @@
+{
+  "strategy_name": "EmaRsiMomentum",
+  "params": {
+    "stoploss": {
+      "stoploss": -0.08
+    },
+    "max_open_trades": {
+      "max_open_trades": 3
+    },
+    "buy": {
+      "adx_trend_threshold": 26,
+      "ema_fast_period": 15,
+      "ema_slow_period": 27,
+      "rsi_buy_ceiling": 69,
+      "rsi_buy_floor": 31
+    },
+    "sell": {
+      "atr_stop_min": 0.023,
+      "atr_stop_multiplier": 3.7,
+      "rsi_exit_overbought": 89,
+      "use_exit_cross": false
+    },
+    "roi": {
+      "0": 0.558,
+      "357": 0.129,
+      "991": 0.058,
+      "2160": 0
+    },
+    "trailing": {
+      "trailing_stop": true,
+      "trailing_stop_positive": 0.105,
+      "trailing_stop_positive_offset": 0.2,
+      "trailing_only_offset_is_reached": true
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-10-10 12:38:49.445777+00:00"
+}

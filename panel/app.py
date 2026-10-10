@@ -1,0 +1,116 @@
+# Control panel: paper trading (dummy money), fast historical replay, and
+# research results. Run with start-panel.ps1, then open http://127.0.0.1:8090
+
+from pathlib import Path
+from typing import Optional
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+
+from panel.bot import PaperBot, PaperBotError
+from panel.common import USERDIR, list_strategies, load_json
+from panel.replay import ReplayJobs
+
+STATIC = Path(__file__).parent / "static"
+
+app = FastAPI(title="ridgeline panel")
+app.mount("/static", StaticFiles(directory=STATIC), name="static")
+
+bot = PaperBot()
+replays = ReplayJobs()
+
+
+class PaperStart(BaseModel):
+    balance: float = Field(gt=0, le=10_000_000)
+    strategy: str
+
+
+class PaperReset(BaseModel):
+    balance: float = Field(gt=0, le=10_000_000)
+    strategy: Optional[str] = None
+
+
+class ReplayRequest(BaseModel):
+    strategy: str
+    balance: float = Field(gt=0, le=10_000_000)
+    start: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    end: str = Field(pattern=r"^(\d{4}-\d{2}-\d{2})?$")
+    max_open_trades: Optional[int] = Field(default=None, ge=1, le=50)
+
+
+def _check_strategy(name: Optional[str]) -> None:
+    if name is not None and name not in list_strategies():
+        raise HTTPException(400, f"Unknown strategy {name!r}")
+
+
+@app.get("/")
+def index():
+    return FileResponse(STATIC / "index.html")
+
+
+@app.get("/api/strategies")
+def strategies():
+    return list_strategies()
+
+
+@app.get("/api/paper/status")
+def paper_status():
+    return bot.status()
+
+
+@app.get("/api/paper/sessions")
+def paper_sessions():
+    return bot.sessions()
+
+
+@app.post("/api/paper/start")
+def paper_start(req: PaperStart):
+    _check_strategy(req.strategy)
+    try:
+        return bot.start(req.balance, req.strategy)
+    except PaperBotError as e:
+        raise HTTPException(409, str(e))
+
+
+@app.post("/api/paper/stop")
+def paper_stop():
+    try:
+        return bot.stop()
+    except PaperBotError as e:
+        raise HTTPException(409, str(e))
+
+
+@app.post("/api/paper/reset")
+def paper_reset(req: PaperReset):
+    _check_strategy(req.strategy)
+    try:
+        return bot.reset(req.balance, req.strategy)
+    except PaperBotError as e:
+        raise HTTPException(409, str(e))
+
+
+@app.post("/api/replay")
+def replay_start(req: ReplayRequest):
+    _check_strategy(req.strategy)
+    job_id = replays.submit(req.strategy, req.balance, req.start, req.end, req.max_open_trades)
+    return {"id": job_id}
+
+
+@app.get("/api/replay/{job_id}")
+def replay_get(job_id: str):
+    job = replays.get(job_id)
+    if not job:
+        raise HTTPException(404, "No such replay")
+    return job
+
+
+@app.get("/api/replays")
+def replay_history():
+    return replays.history()
+
+
+@app.get("/api/research")
+def research():
+    return load_json(USERDIR / "research" / "latest.json", None) or {}

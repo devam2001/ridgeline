@@ -1,0 +1,32 @@
+{
+  "strategy_name": "TrendDipBuyer1h",
+  "params": {
+    "roi": {
+      "0": 0.05,
+      "360": 0.025,
+      "1440": 0.01
+    },
+    "stoploss": {
+      "stoploss": -0.1
+    },
+    "trailing": {
+      "trailing_stop": false,
+      "trailing_stop_positive": null,
+      "trailing_stop_positive_offset": 0.0,
+      "trailing_only_offset_is_reached": false
+    },
+    "max_open_trades": {
+      "max_open_trades": 3
+    },
+    "buy": {
+      "bb_std": 2.0,
+      "rsi_entry": 17
+    },
+    "sell": {
+      "atr_stop_multiplier": 4.9,
+      "rsi_exit": 65
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-10-10 12:34:56.540413+00:00"
+}

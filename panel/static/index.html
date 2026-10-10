@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ridgeline Panel</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◆</span>
+      <span>ridgeline</span>
+      <span class="badge badge-safe" title="This panel can only run dry-run bots. Real funds are never used.">PAPER MONEY ONLY</span>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="paper" role="tab">Paper trading</button>
+      <button class="tab" data-tab="replay" role="tab">Replay</button>
+      <button class="tab" data-tab="research" role="tab">Research</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ===================== PAPER TRADING ===================== -->
+    <section id="tab-paper" class="tab-panel active">
+      <div class="panel-head">
+        <div>
+          <h1>Live paper trading</h1>
+          <p class="muted">Trades real-time Binance prices with a fake wallet. No orders reach the exchange.</p>
+        </div>
+        <a id="frequi-link" class="btn btn-ghost" href="http://127.0.0.1:8080" target="_blank" rel="noopener">Open FreqUI ↗</a>
+      </div>
+
+      <div id="paper-alert" class="alert" hidden></div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h2>Session</h2>
+          <dl class="kv" id="paper-session">
+            <dt>Status</dt><dd><span id="paper-state" class="pill">…</span></dd>
+          </dl>
+        </div>
+        <form class="card" id="paper-form">
+          <h2>Fake wallet</h2>
+          <div class="form-row">
+            <label>Starting balance (USDT)
+              <input type="number" id="paper-balance" min="10" step="10" value="1000" required>
+            </label>
+            <label>Strategy
+              <select id="paper-strategy" class="strategy-select"></select>
+            </label>
+          </div>
+          <div class="btn-row">
+            <button type="submit" class="btn btn-primary" id="paper-start">Start</button>
+            <button type="button" class="btn" id="paper-stop">Stop</button>
+            <button type="button" class="btn btn-warn" id="paper-reset" title="Stop, then start a fresh session with a new wallet. Old sessions are kept.">Reset wallet</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="tiles" id="paper-tiles"></div>
+
+      <div class="card">
+        <h2>Open trades</h2>
+        <div class="table-wrap"><table id="paper-open"></table></div>
+      </div>
+      <div class="card">
+        <h2>Closed trades <span class="muted small">(latest 50)</span></h2>
+        <div class="table-wrap"><table id="paper-closed"></table></div>
+      </div>
+    </section>
+
+    <!-- ===================== REPLAY ===================== -->
+    <section id="tab-replay" class="tab-panel">
+      <div class="panel-head">
+        <div>
+          <h1>Fast historical replay</h1>
+          <p class="muted">Simulate a strategy over past data with any starting balance. Months take seconds.</p>
+        </div>
+      </div>
+
+      <form class="card" id="replay-form">
+        <div class="form-row form-row-5">
+          <label>Strategy <select id="replay-strategy" class="strategy-select"></select></label>
+          <label>Starting balance (USDT) <input type="number" id="replay-balance" min="10" step="10" value="1000" required></label>
+          <label>From <input type="date" id="replay-start" value="2025-06-01" required></label>
+          <label title="Leave blank to run up to the latest downloaded candle">To (blank = latest) <input type="date" id="replay-end"></label>
+          <label>Max open trades <input type="number" id="replay-mot" min="1" max="50" placeholder="config"></label>
+        </div>
+        <div class="btn-row">
+          <button type="submit" class="btn btn-primary" id="replay-run">Run replay</button>
+          <span id="replay-status" class="muted"></span>
+        </div>
+      </form>
+
+      <div id="replay-result" hidden>
+        <div class="tiles" id="replay-tiles"></div>
+        <div class="card">
+          <h2>Equity vs buy-and-hold</h2>
+          <div class="chart-box"><canvas id="replay-chart"></canvas></div>
+        </div>
+        <div class="card">
+          <h2>Exit reasons</h2>
+          <div class="table-wrap"><table id="replay-exits"></table></div>
+        </div>
+        <div class="card">
+          <h2>Trades</h2>
+          <div class="table-wrap tall"><table id="replay-trades"></table></div>
+        </div>
+      </div>
+
+      <div class="card" id="replay-history-card">
+        <h2>Past replays</h2>
+        <div class="table-wrap"><table id="replay-history"></table></div>
+      </div>
+    </section>
+
+    <!-- ===================== RESEARCH ===================== -->
+    <section id="tab-research" class="tab-panel">
+      <div class="panel-head">
+        <div>
+          <h1>Research &amp; go-live gates</h1>
+          <p class="muted">Out-of-sample results from <code>scripts/research.py gates</code>. A strategy should pass every gate,
+            then paper-trade for 4+ weeks, before any real money.</p>
+        </div>
+      </div>
+      <div id="research-body"></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

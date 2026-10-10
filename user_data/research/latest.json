@@ -1,0 +1,734 @@
+{
+  "generated": "2026-10-10T12:42:49+00:00",
+  "periods": {
+    "is": [
+      "2023-06-01",
+      "2025-06-01"
+    ],
+    "oos": [
+      "2025-06-01",
+      "2026-10-10"
+    ]
+  },
+  "benchmarks": {
+    "is": {
+      "equal_weight_pct": 163.44,
+      "btc_pct": 293.93
+    },
+    "oos": {
+      "equal_weight_pct": -16.69,
+      "btc_pct": -21.78
+    }
+  },
+  "strategies": {
+    "EmaRsiMomentum": {
+      "is": {
+        "strategy": "EmaRsiMomentum",
+        "timerange": "20230601-20250601",
+        "start": "2023-06-01 00:00:00",
+        "end": "2025-06-01 00:00:00",
+        "starting_balance": 1000.0,
+        "final_balance": 1562.2,
+        "profit_pct": 56.22,
+        "market_change_pct": 159.79,
+        "max_drawdown_pct": 10.82,
+        "profit_factor": 1.62,
+        "winrate_pct": 58.0,
+        "trades": 138,
+        "calmar": 13.58,
+        "sharpe": 0.66,
+        "cagr_pct": 24.95,
+        "exit_reasons": {
+          "roi": {
+            "count": 89,
+            "profit_abs": 1473.75
+          },
+          "force_exit": {
+            "count": 1,
+            "profit_abs": 1.27
+          },
+          "trailing_stop_loss": {
+            "count": 48,
+            "profit_abs": -912.82
+          }
+        }
+      },
+      "oos": {
+        "strategy": "EmaRsiMomentum",
+        "timerange": "20250601-20261010",
+        "start": "2025-06-01 00:00:00",
+        "end": "2026-10-10 00:00:00",
+        "starting_balance": 1000.0,
+        "final_balance": 990.25,
+        "profit_pct": -0.97,
+        "market_change_pct": -15.5,
+        "max_drawdown_pct": 20.23,
+        "profit_factor": 0.97,
+        "winrate_pct": 55.0,
+        "trades": 60,
+        "calmar": -0.19,
+        "sharpe": -0.03,
+        "cagr_pct": -0.72,
+        "exit_reasons": {
+          "roi": {
+            "count": 35,
+            "profit_abs": 325.64
+          },
+          "trailing_stop_loss": {
+            "count": 25,
+            "profit_abs": -335.39
+          }
+        }
+      },
+      "stress": {
+        "strategy": "EmaRsiMomentum",
+        "timerange": "20250601-20261010",
+        "start": "2025-06-01 00:00:00",
+        "end": "2026-10-10 00:00:00",
+        "starting_balance": 1000.0,
+        "final_balance": 955.53,
+        "profit_pct": -4.45,
+        "market_change_pct": -15.5,
+        "max_drawdown_pct": 21.84,
+        "profit_factor": 0.87,
+        "winrate_pct": 46.7,
+        "trades": 60,
+        "calmar": -0.78,
+        "sharpe": -0.13,
+        "cagr_pct": -3.29,
+        "exit_reasons": {
+          "roi": {
+            "count": 34,
+            "profit_abs": 301.8
+          },
+          "trailing_stop_loss": {
+            "count": 26,
+            "profit_abs": -346.26
+          }
+        }
+      },
+      "walkforward": {
+        "windows": [
+          {
+            "window": "2023-06-01 -> 2023-09-01",
+            "profit_pct": 6.04,
+            "trades": 14,
+            "market_change_pct": -8.31
+          },
+          {
+            "window": "2023-09-01 -> 2023-12-01",
+            "profit_pct": 9.83,
+            "trades": 17,
+            "market_change_pct": 52.37
+          },
+          {
+            "window": "2023-12-01 -> 2024-03-01",
+            "profit_pct": 11.27,
+            "trades": 30,
+            "market_change_pct": 62.35
+          },
+          {
+            "window": "2024-03-01 -> 2024-06-01",
+            "profit_pct": 8.39,
+            "trades": 19,
+            "market_change_pct": 9.81
+          },
+          {
+            "window": "2024-06-01 -> 2024-09-01",
+            "profit_pct": -4.26,
+            "trades": 16,
+            "market_change_pct": -22.59
+          },
+          {
+            "window": "2024-09-01 -> 2024-12-01",
+            "profit_pct": 17.01,
+            "trades": 17,
+            "market_change_pct": 105.73
+          },
+          {
+            "window": "2024-12-01 -> 2025-03-01",
+            "profit_pct": 2.33,
+            "trades": 11,
+            "market_change_pct": -26.7
+          },
+          {
+            "window": "2025-03-01 -> 2025-06-01",
+            "profit_pct": -3.91,
+            "trades": 14,
+            "market_change_pct": 1.02
+          },
+          {
+            "window": "2025-06-01 -> 2025-09-01",
+            "profit_pct": 2.34,
+            "trades": 11,
+            "market_change_pct": 26.88
+          },
+          {
+            "window": "2025-09-01 -> 2025-12-01",
+            "profit_pct": -5.11,
+            "trades": 13,
+            "market_change_pct": -30.65
+          },
+          {
+            "window": "2025-12-01 -> 2026-03-01",
+            "profit_pct": -2.42,
+            "trades": 4,
+            "market_change_pct": -26.27
+          },
+          {
+            "window": "2026-03-01 -> 2026-06-01",
+            "profit_pct": -6.62,
+            "trades": 12,
+            "market_change_pct": 4.07
+          },
+          {
+            "window": "2026-06-01 -> 2026-09-01",
+            "profit_pct": -1.11,
+            "trades": 8,
+            "market_change_pct": 1.57
+          },
+          {
+            "window": "2026-09-01 -> 2026-10-10",
+            "profit_pct": 15.03,
+            "trades": 12,
+            "market_change_pct": 25.28
+          }
+        ],
+        "pct_profitable": 57.1,
+        "worst_pct": -6.62
+      },
+      "bias": {
+        "lookahead_clean": true,
+        "lookahead_note": "20 signals checked; biased indicators: none",
+        "recursive_max_diff_pct": 0.338,
+        "recursive_note": "worst indicator deviation with fewer startup candles"
+      },
+      "gates": [
+        {
+          "label": "OOS profit > 0%",
+          "value": -0.97,
+          "pass": false
+        },
+        {
+          "label": "OOS profit factor >= 1.3",
+          "value": 0.97,
+          "pass": false
+        },
+        {
+          "label": "OOS max drawdown <= 20%",
+          "value": 20.23,
+          "pass": false
+        },
+        {
+          "label": "OOS Calmar >= 1.0",
+          "value": -0.19,
+          "pass": false
+        },
+        {
+          "label": "OOS trades >= 100",
+          "value": 60,
+          "pass": false
+        },
+        {
+          "label": "Profitable in >= 60% of walk-forward windows",
+          "value": 57.1,
+          "pass": false
+        },
+        {
+          "label": "OOS still profitable with +50% fees",
+          "value": -4.45,
+          "pass": false
+        },
+        {
+          "label": "No lookahead bias",
+          "value": true,
+          "pass": true
+        },
+        {
+          "label": "Indicators stable vs startup candles (<= 1%)",
+          "value": 0.338,
+          "pass": true
+        }
+      ],
+      "eligible_for_paper": false
+    },
+    "TrendDipBuyer1h": {
+      "is": {
+        "strategy": "TrendDipBuyer1h",
+        "timerange": "20230601-20250601",
+        "start": "2023-06-01 00:00:00",
+        "end": "2025-06-01 00:00:00",
+        "starting_balance": 1000.0,
+        "final_balance": 824.8,
+        "profit_pct": -17.52,
+        "market_change_pct": 159.79,
+        "max_drawdown_pct": 31.9,
+        "profit_factor": 0.89,
+        "winrate_pct": 64.5,
+        "trades": 876,
+        "calmar": -1.44,
+        "sharpe": -0.91,
+        "cagr_pct": -9.17,
+        "exit_reasons": {
+          "exit_signal": {
+            "count": 715,
+            "profit_abs": 788.1
+          },
+          "roi": {
+            "count": 58,
+            "profit_abs": 261.65
+          },
+          "trailing_stop_loss": {
+            "count": 103,
+            "profit_abs": -1224.95
+          }
+        }
+      },
+      "oos": {
+        "strategy": "TrendDipBuyer1h",
+        "timerange": "20250601-20261010",
+        "start": "2025-06-01 00:00:00",
+        "end": "2026-10-10 00:00:00",
+        "starting_balance": 1000.0,
+        "final_balance": 849.55,
+        "profit_pct": -15.04,
+        "market_change_pct": -15.5,
+        "max_drawdown_pct": 19.8,
+        "profit_factor": 0.77,
+        "winrate_pct": 63.5,
+        "trades": 288,
+        "calmar": -2.93,
+        "sharpe": -1.0,
+        "cagr_pct": -11.31,
+        "exit_reasons": {
+          "exit_signal": {
+            "count": 243,
+            "profit_abs": 206.6
+          },
+          "roi": {
+            "count": 12,
+            "profit_abs": 93.52
+          },
+          "trailing_stop_loss": {
+            "count": 33,
+            "profit_abs": -450.57
+          }
+        }
+      },
+      "stress": {
+        "strategy": "TrendDipBuyer1h",
+        "timerange": "20250601-20261010",
+        "start": "2025-06-01 00:00:00",
+        "end": "2026-10-10 00:00:00",
+        "starting_balance": 1000.0,
+        "final_balance": 794.05,
+        "profit_pct": -20.6,
+        "market_change_pct": -15.5,
+        "max_drawdown_pct": 23.57,
+        "profit_factor": 0.68,
+        "winrate_pct": 61.1,
+        "trades": 288,
+        "calmar": -3.37,
+        "sharpe": -1.41,
+        "cagr_pct": -15.61,
+        "exit_reasons": {
+          "exit_signal": {
+            "count": 242,
+            "profit_abs": 150.43
+          },
+          "roi": {
+            "count": 12,
+            "profit_abs": 91.34
+          },
+          "trailing_stop_loss": {
+            "count": 34,
+            "profit_abs": -447.72
+          }
+        }
+      },
+      "walkforward": {
+        "windows": [
+          {
+            "window": "2023-06-01 -> 2023-09-01",
+            "profit_pct": -21.2,
+            "trades": 86,
+            "market_change_pct": -8.31
+          },
+          {
+            "window": "2023-09-01 -> 2023-12-01",
+            "profit_pct": 6.04,
+            "trades": 107,
+            "market_change_pct": 52.37
+          },
+          {
+            "window": "2023-12-01 -> 2024-03-01",
+            "profit_pct": 10.76,
+            "trades": 159,
+            "market_change_pct": 62.35
+          },
+          {
+            "window": "2024-03-01 -> 2024-06-01",
+            "profit_pct": -8.38,
+            "trades": 132,
+            "market_change_pct": 9.81
+          },
+          {
+            "window": "2024-06-01 -> 2024-09-01",
+            "profit_pct": -12.0,
+            "trades": 66,
+            "market_change_pct": -22.59
+          },
+          {
+            "window": "2024-09-01 -> 2024-12-01",
+            "profit_pct": -2.91,
+            "trades": 120,
+            "market_change_pct": 105.73
+          },
+          {
+            "window": "2024-12-01 -> 2025-03-01",
+            "profit_pct": 6.15,
+            "trades": 114,
+            "market_change_pct": -26.7
+          },
+          {
+            "window": "2025-03-01 -> 2025-06-01",
+            "profit_pct": 5.28,
+            "trades": 93,
+            "market_change_pct": 1.02
+          },
+          {
+            "window": "2025-06-01 -> 2025-09-01",
+            "profit_pct": -2.26,
+            "trades": 129,
+            "market_change_pct": 26.88
+          },
+          {
+            "window": "2025-09-01 -> 2025-12-01",
+            "profit_pct": -6.97,
+            "trades": 69,
+            "market_change_pct": -30.65
+          },
+          {
+            "window": "2025-12-01 -> 2026-03-01",
+            "profit_pct": 0.0,
+            "trades": 0,
+            "market_change_pct": -26.27
+          },
+          {
+            "window": "2026-03-01 -> 2026-06-01",
+            "profit_pct": 0.0,
+            "trades": 0,
+            "market_change_pct": 4.07
+          },
+          {
+            "window": "2026-06-01 -> 2026-09-01",
+            "profit_pct": -1.94,
+            "trades": 18,
+            "market_change_pct": 1.57
+          },
+          {
+            "window": "2026-09-01 -> 2026-10-10",
+            "profit_pct": -5.12,
+            "trades": 74,
+            "market_change_pct": 25.28
+          }
+        ],
+        "pct_profitable": 28.6,
+        "worst_pct": -21.2
+      },
+      "bias": {
+        "lookahead_clean": true,
+        "lookahead_note": "20 signals checked; biased indicators: none",
+        "recursive_max_diff_pct": 0.338,
+        "recursive_note": "worst indicator deviation with fewer startup candles"
+      },
+      "gates": [
+        {
+          "label": "OOS profit > 0%",
+          "value": -15.04,
+          "pass": false
+        },
+        {
+          "label": "OOS profit factor >= 1.3",
+          "value": 0.77,
+          "pass": false
+        },
+        {
+          "label": "OOS max drawdown <= 20%",
+          "value": 19.8,
+          "pass": true
+        },
+        {
+          "label": "OOS Calmar >= 1.0",
+          "value": -2.93,
+          "pass": false
+        },
+        {
+          "label": "OOS trades >= 100",
+          "value": 288,
+          "pass": true
+        },
+        {
+          "label": "Profitable in >= 60% of walk-forward windows",
+          "value": 28.6,
+          "pass": false
+        },
+        {
+          "label": "OOS still profitable with +50% fees",
+          "value": -20.6,
+          "pass": false
+        },
+        {
+          "label": "No lookahead bias",
+          "value": true,
+          "pass": true
+        },
+        {
+          "label": "Indicators stable vs startup candles (<= 1%)",
+          "value": 0.338,
+          "pass": true
+        }
+      ],
+      "eligible_for_paper": false
+    },
+    "TrendRider4h": {
+      "is": {
+        "strategy": "TrendRider4h",
+        "timerange": "20230601-20250601",
+        "start": "2023-06-01 00:00:00",
+        "end": "2025-06-01 00:00:00",
+        "starting_balance": 1000.0,
+        "final_balance": 1825.37,
+        "profit_pct": 82.54,
+        "market_change_pct": 159.73,
+        "max_drawdown_pct": 7.68,
+        "profit_factor": 1.74,
+        "winrate_pct": 40.9,
+        "trades": 257,
+        "calmar": 28.09,
+        "sharpe": 0.99,
+        "cagr_pct": 35.05,
+        "exit_reasons": {
+          "exit_signal": {
+            "count": 228,
+            "profit_abs": 719.71
+          },
+          "trailing_stop_loss": {
+            "count": 27,
+            "profit_abs": 146.09
+          },
+          "stop_loss": {
+            "count": 2,
+            "profit_abs": -40.43
+          }
+        }
+      },
+      "oos": {
+        "strategy": "TrendRider4h",
+        "timerange": "20250601-20261010",
+        "start": "2025-06-01 00:00:00",
+        "end": "2026-10-10 00:00:00",
+        "starting_balance": 1000.0,
+        "final_balance": 1210.88,
+        "profit_pct": 21.09,
+        "market_change_pct": -14.83,
+        "max_drawdown_pct": 5.98,
+        "profit_factor": 1.66,
+        "winrate_pct": 42.2,
+        "trades": 90,
+        "calmar": 13.58,
+        "sharpe": 0.61,
+        "cagr_pct": 15.12,
+        "exit_reasons": {
+          "exit_signal": {
+            "count": 82,
+            "profit_abs": 256.04
+          },
+          "force_exit": {
+            "count": 1,
+            "profit_abs": 2.83
+          },
+          "trailing_stop_loss": {
+            "count": 7,
+            "profit_abs": -47.99
+          }
+        }
+      },
+      "stress": {
+        "strategy": "TrendRider4h",
+        "timerange": "20250601-20261010",
+        "start": "2025-06-01 00:00:00",
+        "end": "2026-10-10 00:00:00",
+        "starting_balance": 1000.0,
+        "final_balance": 1189.67,
+        "profit_pct": 18.97,
+        "market_change_pct": -14.83,
+        "max_drawdown_pct": 6.14,
+        "profit_factor": 1.58,
+        "winrate_pct": 42.2,
+        "trades": 90,
+        "calmar": 11.89,
+        "sharpe": 0.56,
+        "cagr_pct": 13.63,
+        "exit_reasons": {
+          "exit_signal": {
+            "count": 82,
+            "profit_abs": 236.03
+          },
+          "force_exit": {
+            "count": 1,
+            "profit_abs": 2.67
+          },
+          "trailing_stop_loss": {
+            "count": 7,
+            "profit_abs": -49.03
+          }
+        }
+      },
+      "walkforward": {
+        "windows": [
+          {
+            "window": "2023-06-01 -> 2023-09-01",
+            "profit_pct": 8.24,
+            "trades": 28,
+            "market_change_pct": -7.86
+          },
+          {
+            "window": "2023-09-01 -> 2023-12-01",
+            "profit_pct": 6.81,
+            "trades": 31,
+            "market_change_pct": 55.06
+          },
+          {
+            "window": "2023-12-01 -> 2024-03-01",
+            "profit_pct": 27.13,
+            "trades": 42,
+            "market_change_pct": 60.51
+          },
+          {
+            "window": "2024-03-01 -> 2024-06-01",
+            "profit_pct": 2.28,
+            "trades": 43,
+            "market_change_pct": 9.18
+          },
+          {
+            "window": "2024-06-01 -> 2024-09-01",
+            "profit_pct": 1.18,
+            "trades": 28,
+            "market_change_pct": -23.11
+          },
+          {
+            "window": "2024-09-01 -> 2024-12-01",
+            "profit_pct": 20.36,
+            "trades": 43,
+            "market_change_pct": 106.77
+          },
+          {
+            "window": "2024-12-01 -> 2025-03-01",
+            "profit_pct": 1.14,
+            "trades": 27,
+            "market_change_pct": -25.45
+          },
+          {
+            "window": "2025-03-01 -> 2025-06-01",
+            "profit_pct": -3.2,
+            "trades": 20,
+            "market_change_pct": -1.13
+          },
+          {
+            "window": "2025-06-01 -> 2025-09-01",
+            "profit_pct": 7.91,
+            "trades": 39,
+            "market_change_pct": 26.65
+          },
+          {
+            "window": "2025-09-01 -> 2025-12-01",
+            "profit_pct": 5.42,
+            "trades": 24,
+            "market_change_pct": -30.74
+          },
+          {
+            "window": "2025-12-01 -> 2026-03-01",
+            "profit_pct": 0.0,
+            "trades": 0,
+            "market_change_pct": -24.51
+          },
+          {
+            "window": "2026-03-01 -> 2026-06-01",
+            "profit_pct": -0.88,
+            "trades": 1,
+            "market_change_pct": 2.55
+          },
+          {
+            "window": "2026-06-01 -> 2026-09-01",
+            "profit_pct": 5.71,
+            "trades": 5,
+            "market_change_pct": 2.24
+          },
+          {
+            "window": "2026-09-01 -> 2026-10-10",
+            "profit_pct": 0.07,
+            "trades": 22,
+            "market_change_pct": 25.38
+          }
+        ],
+        "pct_profitable": 78.6,
+        "worst_pct": -3.2
+      },
+      "bias": {
+        "lookahead_clean": true,
+        "lookahead_note": "20 signals checked; biased indicators: none",
+        "recursive_max_diff_pct": 0.196,
+        "recursive_note": "worst indicator deviation with fewer startup candles"
+      },
+      "gates": [
+        {
+          "label": "OOS profit > 0%",
+          "value": 21.09,
+          "pass": true
+        },
+        {
+          "label": "OOS profit factor >= 1.3",
+          "value": 1.66,
+          "pass": true
+        },
+        {
+          "label": "OOS max drawdown <= 20%",
+          "value": 5.98,
+          "pass": true
+        },
+        {
+          "label": "OOS Calmar >= 1.0",
+          "value": 13.58,
+          "pass": true
+        },
+        {
+          "label": "OOS trades >= 100",
+          "value": 90,
+          "pass": false
+        },
+        {
+          "label": "Profitable in >= 60% of walk-forward windows",
+          "value": 78.6,
+          "pass": true
+        },
+        {
+          "label": "OOS still profitable with +50% fees",
+          "value": 18.97,
+          "pass": true
+        },
+        {
+          "label": "No lookahead bias",
+          "value": true,
+          "pass": true
+        },
+        {
+          "label": "Indicators stable vs startup candles (<= 1%)",
+          "value": 0.196,
+          "pass": true
+        }
+      ],
+      "eligible_for_paper": false
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "strategy_name": "TrendRider4h",
+  "params": {
+    "buy": {"adx_threshold": 23, "breakout_period": 15},
+    "sell": {"chandelier_mult": 4.9, "exit_period": 6, "use_donchian_exit": true}
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-10-10 12:24:16.000000+00:00"
+}
