@@ -113,6 +113,10 @@ The gap between the IS results is the most important finding:
 ## Next steps
 1. **Paper-trade TrendRider4h for 4+ weeks** from the panel. Use Reset wallet
    and pick TrendRider4h. `config.json` now holds today's point-in-time top 25.
+   - Then run **Paper vs replay** on that session, or
+     `python scripts/reconcile.py <session>`.
+   - That's the last gate: the paper results must be close to a replay of
+     the same weeks.
 2. **Re-run `research.py gates` monthly.** New data adds OOS trades, and the
    100-trade gate will be settled honestly.
 3. **Optionally re-hyperopt TrendRider4h** on point-in-time IS universes. Treat

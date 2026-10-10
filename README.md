@@ -29,8 +29,9 @@ panel cannot start a live bot at all.
 | `user_data/config.private.json` | API login, JWT secret, exchange keys - **never share/commit** (loaded automatically via `add_config_files`) |
 | `panel/` | control panel (FastAPI + plain JS) |
 | `scripts/research.py` | IS/OOS backtests, walk-forward, fee stress, bias checks, go-live gates |
-| `ridgeline/` | shared package: risk limits (`risk.py`, `freqtrade_risk.py`), audit trail, tear-sheet reports, alerts |
+| `ridgeline/` | shared package: risk limits (`risk.py`, `freqtrade_risk.py`), audit trail, tear-sheet reports, paper-vs-replay reconciliation, alerts |
 | `scripts/report.py`, `scripts/watchdog.py` | tear-sheet generator; health/risk watchdog with Telegram alerts |
+| `scripts/reconcile.py` | the last go-live gate: compares a paper session with a replay of the same weeks |
 | `tests/`, `.github/workflows/ci.yml` | test suite (risk, audit, lookahead, universe, panel, hygiene) run by GitHub Actions |
 | `Dockerfile`, `docker-compose.yml` | 24/7 deployment: bot + monitor-mode panel + watchdog |
 | `docs/OPERATIONS.md` | runbook: risk limits, kill switch, alerts, VPS deployment, incidents, monthly routine |
@@ -150,6 +151,36 @@ Then it must paper-trade for **4+ weeks** with results close to a replay of
 the same weeks. If nothing passes, the answer is "don't go live yet" - not
 "loosen the gates".
 
+### Paper vs replay (the last gate)
+
+Use the panel's **Paper trading → Paper vs replay** card, or run:
+
+```bash
+python scripts/reconcile.py <session-id>
+```
+
+It replays the exact period the session ran, with the same strategy, pairs and
+starting balance. Then it matches the trades one by one (same pair, entries
+within 1.5 candles). The session is "close to the replay" when all of these hold:
+
+- it ran for at least 28 days
+- at least 80% of trades happened in both
+- realised return is within 2 percentage points of the replay
+- fills cost at most 0.3% per side compared with the replay's candle prices
+
+The result also splits the return gap into three parts:
+- trades in both, which shows execution differences
+- paper-only trades
+- replay-only trades
+
+It flags anything the replay can't reproduce:
+- manual pauses, resumes and flattens
+- drawdown halts
+- strategy code or parameters that changed mid-session
+
+The Research tab shows the newest result for each strategy.
+See [docs/OPERATIONS.md](docs/OPERATIONS.md#paper-vs-replay).
+
 Plain backtests still work as usual:
 
 ```bash
@@ -229,6 +260,7 @@ The tests cover:
 - audit tamper detection
 - a lookahead check: signals must not change when future candles are removed
 - point-in-time universe selection
+- paper-vs-replay trade matching, gap breakdown and checks
 - the panel's dry-run guard and kill-switch sequence
 - repo hygiene: no secrets, and no live config in git
 

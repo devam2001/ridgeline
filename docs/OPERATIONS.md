@@ -10,6 +10,7 @@ How to run ridgeline 24/7, watch it, and act when something goes wrong.
 - [Deploying on a VPS (Docker)](#deploying-on-a-vps-docker)
 - [Incident checklist](#incident-checklist)
 - [Monthly routine](#monthly-routine)
+- [Paper vs replay](#paper-vs-replay)
 - [Reports](#reports)
 
 ---
@@ -161,10 +162,72 @@ git pull && docker compose up -d --build
 python scripts/research.py universe --download --write-config   # refresh data + live pair list
 python scripts/research.py gates                                 # re-test every strategy on new OOS data
 python scripts/report.py --db user_data/paper/<session>.sqlite --month YYYY-MM
+python scripts/reconcile.py <session>                            # paper vs replay of the same weeks
 ```
 
 If you change the pair list or the strategy, restart the bot: `docker compose
 restart bot`, or Reset in the panel.
+
+## Paper vs replay
+
+The last go-live gate: 4+ weeks of paper trading whose results are close to a
+replay (backtest) of the same weeks. Run it from **Paper trading → Paper vs
+replay** in the panel, or from the command line:
+
+```bash
+python scripts/reconcile.py <session-id>                       # a panel session
+python scripts/reconcile.py --db user_data/tradesv3.docker.sqlite --log user_data/logs/bot.log   # the Docker bot
+```
+
+**What it does.**
+1. Tops up candle data for the session's pairs.
+2. Replays the session's period, starting at the candle its first decision
+   used and using the same strategy, pairs, starting balance and max open trades.
+3. Matches trades: same pair, entries at most 1.5 candles apart.
+
+The result is saved next to the session's database as
+`<session>.reconcile.json`. The Research tab shows the newest result for each
+strategy.
+
+**Where the settings come from.** A session started from the panel records
+its strategy, pair list, balance, start time and a fingerprint of the
+strategy code in `<session>.meta.json`. That matters because `config.json`'s
+pair list changes monthly. Older sessions and the Docker bot fall back to the
+bot's log and database. `--strategy`, `--pairs`, `--balance`, `--start` and
+`--end` override any of them.
+
+**Checks.** All must pass:
+
+| Check | Target | Why |
+|---|---|---|
+| Length | ≥ 28 days | Long enough to see a few trades and some market change |
+| Trades in both | ≥ 80% | Signals fire the same way live as in the backtest |
+| Return gap | ≤ 2 percentage points | The backtest's results are reachable |
+| Fill cost | ≤ 0.3% per side | Fills land near the candle prices the backtest assumes |
+
+Fill cost is the average difference between paper and replay prices. It's
+positive when paper paid more on entry or received less on exit. Exits only
+count when both sides left for the same reason.
+
+**Reading a gap.** The return gap is split into three parts:
+- **trades in both**: execution, meaning fills, stop timing and exit prices
+- **paper-only trades**
+- **replay-only trades**
+
+One-sided trades usually come from:
+- an entry order that didn't fill within its 10-minute timeout
+- a different equity, so a risk limit or the open-trade cap blocked one side
+- signals right at the start or end of the period
+
+The result notes things the replay can't reproduce, so check those first:
+- manual pause, resume or flatten (from the audit trail)
+- drawdown halts, which need a manual resume live but resume automatically in backtests
+- strategy code or parameters changed during the session
+- paper trades newer than the latest closed candle
+
+**If it fails.** Don't loosen the targets. Find out why the two diverged. If
+the backtest assumptions are wrong (for example, real fills are consistently
+worse), fix the research model and re-run the gates before trying again.
 
 ## Reports
 
