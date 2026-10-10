@@ -113,6 +113,16 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .btn-primary:hover { background: var(--accent); filter: brightness(1.08); }
 .btn-warn { color: var(--warn); }
+.btn-danger { color: var(--neg); border-color: color-mix(in srgb, var(--neg) 45%, var(--border)); }
+.btn-danger:hover { background: var(--err-bg); }
+
+.meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.meter .row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.meter .row b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.meter .track { height: 6px; border-radius: 3px; background: var(--surface-2); margin-top: 5px; overflow: hidden; }
+.meter .fill { height: 100%; border-radius: 3px; background: var(--pos); }
+.meter .fill.warn { background: var(--warn); }
+.meter .fill.bad { background: var(--neg); }
 .btn-ghost { background: transparent; }
 
 .pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 10px; border-radius: 999px; background: var(--surface-2); }

@@ -18,3 +18,8 @@ user_data/plot/
 *.docx
 ~$*.docx
 all_usdt.json
+reports/
+user_data/audit/
+user_data/risk_state.json
+.pytest_cache/
+.ruff_cache/

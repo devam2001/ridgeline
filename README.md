@@ -5,7 +5,15 @@ A Freqtrade bot for Binance **spot**, with:
 - three candidate strategies and an honest research pipeline to pick between them,
 - a **paper-money control panel**: live paper trading with a fake wallet you
   choose and can reset, plus fast historical replay,
-- the official **FreqUI** dashboard for detailed live monitoring.
+- the official **FreqUI** dashboard for detailed live monitoring,
+- **operations tooling**:
+  - portfolio risk limits and a one-click kill switch
+  - a tamper-evident audit trail
+  - investor-style tear sheets
+  - Docker deployment with a watchdog and Telegram alerts
+  - tests and CI on every push
+
+[![CI](https://github.com/devam2001/ridgeline/actions/workflows/ci.yml/badge.svg)](https://github.com/devam2001/ridgeline/actions/workflows/ci.yml)
 
 Everything ships in **dry-run** mode. Nothing here touches real money; the
 panel cannot start a live bot at all.
@@ -21,6 +29,11 @@ panel cannot start a live bot at all.
 | `user_data/config.private.json` | API login, JWT secret, exchange keys - **never share/commit** (loaded automatically via `add_config_files`) |
 | `panel/` | control panel (FastAPI + plain JS) |
 | `scripts/research.py` | IS/OOS backtests, walk-forward, fee stress, bias checks, go-live gates |
+| `ridgeline/` | shared package: risk limits (`risk.py`, `freqtrade_risk.py`), audit trail, tear-sheet reports, alerts |
+| `scripts/report.py`, `scripts/watchdog.py` | tear-sheet generator; health/risk watchdog with Telegram alerts |
+| `tests/`, `.github/workflows/ci.yml` | test suite (risk, audit, lookahead, universe, panel, hygiene) run by GitHub Actions |
+| `Dockerfile`, `docker-compose.yml` | 24/7 deployment: bot + monitor-mode panel + watchdog |
+| `docs/OPERATIONS.md` | runbook: risk limits, kill switch, alerts, VPS deployment, incidents, monthly routine |
 | `RESEARCH.md` | latest research results and what they mean |
 
 ## 1. Install
@@ -36,18 +49,10 @@ freqtrade list-strategies --userdir user_data # all three should show OK
 `joblib<1.6` is needed because joblib 1.6 removed a module Freqtrade's
 hyperopt still imports.
 
-If `user_data/config.private.json` doesn't exist, create it:
+Create the private config (API secrets, gitignored). This never overwrites an existing file:
 
-```json
-{
-    "exchange": {"key": "", "secret": ""},
-    "api_server": {
-        "username": "freqtrader",
-        "password": "<long random string>",
-        "jwt_secret_key": "<64 random hex chars>",
-        "ws_token": "<random string>"
-    }
-}
+```bash
+python scripts/init_private_config.py
 ```
 
 ## 2. Control panel (paper money + replay)
@@ -165,7 +170,85 @@ cooldown / StoplossGuard / MaxDrawdown protections.)
    real fills and slippage match the paper results.
 4. Turn on `telegram` in the config for entry/exit notifications.
 
-## Risk controls (EmaRsiMomentum; the other strategies follow the same pattern)
+## 6. Operations
+
+### Risk limits and kill switch
+Every strategy runs under portfolio-level limits, enforced in backtests too:
+- **Max single position:** 35% of equity.
+- **Max open risk:** 4.5% of equity, i.e. the total loss if every open stop hit at once.
+- **Daily loss:** 3%. Hitting it pauses new entries until the next UTC day.
+- **Drawdown halt:** 15%. Hitting it stops new entries until a human resumes.
+
+The panel's **Risk controls** card shows live usage of each limit, with three controls:
+- **Pause entries**
+- **Resume**
+- **Flatten all**: the kill switch. It market-closes everything and stops the bot.
+
+### Audit trail
+Every control action, risk event and watchdog alert is appended to a
+hash-chained log in `user_data/audit/`. The panel shows whether the chain
+still verifies.
+
+### Reports
+Investor-style tear sheets come as one self-contained HTML file. Use
+Print → Save as PDF in your browser to get a PDF. Each covers:
+- returns: monthly and year-to-date
+- equity vs BTC, and drawdown
+- Sharpe, Sortino and Calmar
+- trade statistics and the full trade log
+
+```bash
+python scripts/report.py --db user_data/paper/<session>.sqlite --month 2026-10
+python scripts/report.py --backtest user_data/replays/<job-id>
+```
+
+The panel has the same: **Performance tear sheet** on Paper trading, and **Open tear sheet** after a replay.
+
+### Deployment and monitoring
+```bash
+python scripts/init_private_config.py
+docker compose up -d --build        # bot + panel (monitor mode) + watchdog
+```
+
+The watchdog sends Telegram alerts when:
+- the bot is down or stalled
+- the bot is paused or halted
+- any risk limit is at 80% of its threshold or more
+
+Setup, VPS hardening and the incident runbook are in
+[docs/OPERATIONS.md](docs/OPERATIONS.md).
+
+### Tests
+```bash
+pip install -r requirements-dev.txt
+ruff check . && pytest
+```
+
+The tests cover:
+- risk-limit boundaries
+- audit tamper detection
+- a lookahead check: signals must not change when future candles are removed
+- point-in-time universe selection
+- the panel's dry-run guard and kill-switch sequence
+- repo hygiene: no secrets, and no live config in git
+
+GitHub Actions runs them on every push.
+
+## Managing other people's money
+
+The code above is the operational plumbing a fund would expect. **It does not
+make running other people's money legal.** In Australia, dealing in or
+managing crypto-asset portfolios for others, copy trading, or pooling client
+funds generally requires an Australian Financial Services Licence (AFSL).
+Pooled funds are usually also a registered managed investment scheme (MIS),
+with compliance, custody and audit obligations. A wholesale-only structure
+reduces some obligations but doesn't remove the licence question. Other
+countries have their own equivalents.
+
+Talk to a financial-services lawyer before taking anyone else's capital.
+This section is a pointer, not legal advice.
+
+## Strategy risk settings (EmaRsiMomentum; the other strategies follow the same pattern)
 
 - **1.5% risk per trade, ATR-adaptive** — the stoploss distance is no
   longer a flat 5%; it's `min(8%, max(2%, ATR% × 2.5))`, computed per pair

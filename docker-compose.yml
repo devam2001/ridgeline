@@ -1,0 +1,61 @@
+# 24/7 deployment: trading bot + monitor-mode panel + watchdog.
+#
+#   python scripts/init_private_config.py   # once: API secrets (gitignored)
+#   docker compose up -d --build
+#
+# Trades in whatever mode user_data/config.json says - dry_run: true (paper)
+# unless you deliberately change it. Ports are published on 127.0.0.1 only;
+# reach them from your laptop with an SSH tunnel (see docs/OPERATIONS.md).
+
+x-ridgeline: &ridgeline
+  build: .
+  image: ridgeline:latest
+  restart: unless-stopped
+  volumes:
+    - .:/ridgeline
+  working_dir: /ridgeline
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
+services:
+  bot:
+    <<: *ridgeline
+    command:
+      - freqtrade
+      - trade
+      - --userdir=user_data
+      - --config=user_data/config.json
+      - --strategy=${RIDGELINE_STRATEGY:-TrendRider4h}
+      - --db-url=sqlite:////ridgeline/user_data/tradesv3.docker.sqlite
+      - --logfile=user_data/logs/bot.log
+    environment:
+      # listen inside the container network; publishing below stays on localhost
+      FREQTRADE__API_SERVER__LISTEN_IP_ADDRESS: "0.0.0.0"
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/v1/ping', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+
+  panel:
+    <<: *ridgeline
+    command: ["python", "-m", "uvicorn", "panel.app:app", "--host", "0.0.0.0", "--port", "8090"]
+    environment:
+      PANEL_MODE: monitor          # Docker owns the bot process; kill switch still works
+      RIDGELINE_BOT_URL: http://bot:8080
+    ports:
+      - "127.0.0.1:8090:8090"
+    depends_on:
+      - bot
+
+  watchdog:
+    <<: *ridgeline
+    command: ["python", "scripts/watchdog.py"]
+    environment:
+      RIDGELINE_BOT_URL: http://bot:8080
+    depends_on:
+      - bot

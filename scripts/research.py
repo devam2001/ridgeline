@@ -83,7 +83,7 @@ def config_pairs() -> list[str]:
 
 
 @functools.lru_cache(maxsize=None)
-def universe_at(when: str, n: int = UNIVERSE_SIZE) -> tuple[str, ...]:
+def universe_at(when: str, n: int = UNIVERSE_SIZE, datadir: Path = DATADIR) -> tuple[str, ...]:
     """Top-n USDT pairs by quote volume over the lookback window before `when`,
     using only data that existed at that time."""
     if STATIC_UNIVERSE:
@@ -91,7 +91,7 @@ def universe_at(when: str, n: int = UNIVERSE_SIZE) -> tuple[str, ...]:
     t = pd.Timestamp(when, tz="UTC")
     lookback_start = t - pd.Timedelta(days=UNIVERSE_LOOKBACK_DAYS)
     ranked = []
-    for path in DATADIR.glob("*_USDT-1d.feather"):
+    for path in Path(datadir).glob("*_USDT-1d.feather"):
         pair = path.stem.rsplit("-", 1)[0].replace("_", "/")
         if UNIVERSE_BLACKLIST.match(pair):
             continue

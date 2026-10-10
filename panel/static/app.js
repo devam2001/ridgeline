@@ -108,7 +108,10 @@ async function refreshPaper() {
   } else if (session) {
     rows.push(["Strategy", esc(session.strategy)], ["Starting balance", fmtMoney(session.balance)]);
   }
-  if (session) rows.push([st.managed ? "Session" : "Last session", `${esc(session.session_id)}`]);
+  if (session) {
+    rows.push([st.managed ? "Session" : "Last session", `${esc(session.session_id)}`]);
+    rows.push(["Report", `<a href="/api/report?session=${encodeURIComponent(session.session_id)}" target="_blank" rel="noopener">Performance tear sheet ↗</a>`]);
+  }
   $("#paper-session").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
 
   if (st.external && !st.api_up) {
@@ -121,9 +124,12 @@ async function refreshPaper() {
     showPaperAlert("");
   }
 
-  $("#paper-start").disabled = paperBusy || st.managed || st.external;
-  $("#paper-stop").disabled = paperBusy || !st.managed;
-  $("#paper-reset").disabled = paperBusy || st.external;
+  $("#paper-start").disabled = paperBusy || st.managed || st.external || monitorMode;
+  $("#paper-stop").disabled = paperBusy || !st.managed || monitorMode;
+  $("#paper-reset").disabled = paperBusy || st.external || monitorMode;
+  ["#risk-pause", "#risk-resume", "#risk-flatten"].forEach((id) => ($(id).disabled = paperBusy || !st.api_up));
+  if (st.api_up) refreshRisk(); else $("#risk-meters").innerHTML = `<p class="muted small">Available while a bot is running.</p>`;
+  refreshAudit();
 
   // KPIs
   const tiles = $("#paper-tiles");
@@ -205,6 +211,8 @@ function renderReplay(job) {
   const r = job.result;
   const m = r.metrics;
   $("#replay-result").hidden = false;
+  $("#replay-status").innerHTML = `${esc(job.strategy)} · ${esc(job.timerange)} · ` +
+    `<a href="/api/replay/${encodeURIComponent(job.id)}/report" target="_blank" rel="noopener">Open tear sheet ↗</a>`;
   $("#replay-tiles").innerHTML = [
     tile("Final balance (USDT)", fmtMoney(m.final_balance, ""), signClass(m.final_balance - m.starting_balance), `from ${fmtMoney(m.starting_balance, "")}`),
     tile("Strategy return", fmtPct(m.profit_pct), signClass(m.profit_pct), `CAGR ${fmtPct(m.cagr_pct)}`),
@@ -378,8 +386,83 @@ async function loadResearch() {
   body.innerHTML = html;
 }
 
+// =====================================================================
+// Risk controls & audit log
+// =====================================================================
+let monitorMode = false;
+
+function meter(label, value, limit) {
+  const frac = limit > 0 ? Math.min(1, value / limit) : 0;
+  const cls = frac >= 1 ? "bad" : frac >= 0.8 ? "warn" : "";
+  return `<div class="meter"><div class="row"><span>${esc(label)}</span><b>${value.toFixed(2)}% / ${limit}%</b></div>
+    <div class="track"><div class="fill ${cls}" style="width:${Math.max(2, frac * 100)}%"></div></div></div>`;
+}
+
+async function refreshRisk() {
+  let r;
+  try {
+    r = await api("/api/risk");
+  } catch (e) {
+    $("#risk-meters").innerHTML = `<p class="muted small">${esc(e.message)}</p>`;
+    return;
+  }
+  const u = r.usage, l = r.limits;
+  $("#risk-meters").innerHTML = [
+    meter("Drawdown from peak (halt)", u.drawdown_pct, l.max_drawdown_halt_pct),
+    meter("Today's loss (UTC)", u.day_loss_pct, l.daily_loss_limit_pct),
+    meter("Open risk if all stops hit", u.open_risk_pct, l.max_open_risk_pct),
+  ].join("") + `<p class="muted small">Max single position: ${l.max_position_pct}% of equity. Bot state: <b>${esc(r.bot_state)}</b></p>`;
+  const halt = $("#risk-halt");
+  halt.hidden = !r.halt?.halted;
+  if (r.halt?.halted) {
+    halt.className = "pill ext";
+    halt.textContent = "HALTED - review, then Resume";
+    halt.title = r.halt.reason || "";
+  }
+}
+
+async function refreshAudit() {
+  const a = await api("/api/audit?limit=30").catch(() => null);
+  if (!a) return;
+  const chain = $("#audit-chain");
+  chain.className = `pill ${a.chain_ok ? "on" : "ext"}`;
+  chain.textContent = a.chain_ok ? "chain verified" : "CHAIN BROKEN";
+  chain.title = a.problem || "Every record's hash matches its contents and the record before it.";
+  table($("#audit-table"), [
+    { label: "Time (UTC)", render: (e) => esc(e.ts.replace("T", " ").slice(0, 19)) },
+    { label: "Actor", key: "actor" },
+    { label: "Event", key: "event" },
+    { label: "Details", render: (e) => `<span class="muted small">${esc(e.details.message || JSON.stringify(e.details)).slice(0, 140)}</span>` },
+  ], a.events, { empty: "No events yet." });
+}
+
+async function riskAction(path, body, okMsg) {
+  const note = $("#risk-note");
+  note.textContent = "Working…";
+  try {
+    await api(path, { method: "POST", body });
+    note.textContent = okMsg;
+  } catch (e) {
+    note.innerHTML = `<span class="neg">${esc(e.message)}</span>`;
+  }
+  refreshPaper();
+}
+
+$("#risk-pause").addEventListener("click", () => riskAction("/api/bot/pause", undefined, "New entries paused. Open trades are still managed."));
+$("#risk-resume").addEventListener("click", () => riskAction("/api/bot/resume", undefined, "Trading resumed."));
+$("#risk-flatten").addEventListener("click", () => {
+  const typed = prompt("KILL SWITCH\n\nThis stops new entries, market-closes EVERY open position, and stops the bot.\n\nType FLATTEN to confirm:");
+  if (typed === null) return;
+  riskAction("/api/bot/flatten", { confirm: typed.trim() }, "All positions closed and the bot stopped.");
+});
+
 // ---------- boot ----------
 (async function init() {
+  monitorMode = (await api("/api/mode").catch(() => ({}))).monitor === true;
+  if (monitorMode) {
+    $("#paper-form").insertAdjacentHTML("beforeend",
+      `<p class="muted small" style="margin-top:10px">Monitor mode: the bot runs as a Docker service, so Start/Stop/Reset are disabled here. Risk controls still work.</p>`);
+  }
   await loadStrategies().catch(() => {});
   let tab = "paper";
   try { tab = localStorage.getItem("tab") || "paper"; } catch {}

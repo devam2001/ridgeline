@@ -17,24 +17,32 @@
 # This is a STARTING POINT strategy meant to be backtested and tuned before
 # any live use. Run in dry-run first. Nothing here is financial advice.
 
+import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import talib.abstract as ta
-from pandas import DataFrame
-
 from freqtrade.persistence import Trade
 from freqtrade.strategy import (
     BooleanParameter,
     DecimalParameter,
     IntParameter,
-    IStrategy,
     informative,
     stoploss_from_open,
 )
+from pandas import DataFrame
+
+# Shared ridgeline package (portfolio risk limits, audit log) lives at the
+# project root; Freqtrade only puts this strategies folder on the import path.
+_ROOT = str(Path(__file__).resolve().parents[2])
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
+from ridgeline.freqtrade_risk import RiskMixin  # noqa: E402
 
 
-class EmaRsiMomentum(IStrategy):
+class EmaRsiMomentum(RiskMixin):
     INTERFACE_VERSION = 3
 
     # --- Timeframe ---
@@ -267,33 +275,13 @@ class EmaRsiMomentum(IStrategy):
         risk_amount = total_equity * self.risk_per_trade
         stake = risk_amount / stoploss_distance
 
-        # Respect exchange/strategy min & max stake bounds.
+        # Respect exchange/strategy min & max stake bounds, then the
+        # portfolio-level caps (position size, total open risk).
         if min_stake is not None:
             stake = max(stake, min_stake)
         stake = min(stake, max_stake)
 
-        return stake
-
-    def confirm_trade_entry(
-        self,
-        pair: str,
-        order_type: str,
-        amount: float,
-        rate: float,
-        time_in_force: str,
-        current_time: datetime,
-        entry_tag: Optional[str],
-        side: str,
-        **kwargs,
-    ) -> bool:
-        """
-        Final safety gate before an order is actually sent. Extend this if
-        you want extra checks (e.g. blocking entries around scheduled news,
-        or during unusually wide spreads). The ATR stop distance itself is
-        pinned in custom_stoploss() below, the first time it's called for
-        this trade — see there for why.
-        """
-        return True
+        return self.apply_risk_caps(pair, stake, stoploss_distance, current_time, min_stake)
 
     def custom_stoploss(
         self,
