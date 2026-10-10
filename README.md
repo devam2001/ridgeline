@@ -25,6 +25,7 @@ panel cannot start a live bot at all.
 | `user_data/strategies/TrendRider4h.py` | 4h Donchian breakout trend-follower, BTC bear-market filter, ATR chandelier exit |
 | `user_data/strategies/TrendDipBuyer1h.py` | 1h buy-the-dip inside an uptrend (mean reversion) |
 | `user_data/strategies/EmaRsiMomentum.py` | original 1h EMA-crossover + RSI strategy (hyperoptable) |
+| `user_data/strategies/MomentumRotation1d.py` | daily rotation into the 3 strongest coins by risk-adjusted momentum while BTC is in an uptrend (candidate) |
 | `user_data/config.json` | exchange, pairs, risk settings - **no secrets** |
 | `user_data/config.private.json` | API login, JWT secret, exchange keys - **never share/commit** (loaded automatically via `add_config_files`) |
 | `panel/` | control panel (FastAPI + plain JS) |
@@ -32,6 +33,9 @@ panel cannot start a live bot at all.
 | `ridgeline/` | shared package: risk limits (`risk.py`, `freqtrade_risk.py`), audit trail, tear-sheet reports, paper-vs-replay reconciliation, alerts |
 | `scripts/report.py`, `scripts/watchdog.py` | tear-sheet generator; health/risk watchdog with Telegram alerts |
 | `scripts/reconcile.py` | the last go-live gate: compares a paper session with a replay of the same weeks |
+| `scripts/update_data.py` | downloads/refreshes market data and the live pair list (monthly) |
+| `scripts/case_study.py` | builds the research-format case study PDF from the latest results |
+| `installer/`, `.github/workflows/release.yml` | Windows installer and the release pipeline (installer + Docker image) |
 | `tests/`, `.github/workflows/ci.yml` | test suite (risk, audit, lookahead, universe, panel, hygiene) run by GitHub Actions |
 | `Dockerfile`, `docker-compose.yml` | 24/7 deployment: bot + monitor-mode panel + watchdog |
 | `docs/OPERATIONS.md` | runbook: risk limits, kill switch, alerts, VPS deployment, incidents, monthly routine |
@@ -39,16 +43,35 @@ panel cannot start a live bot at all.
 
 ## 1. Install
 
+### Windows installer (easiest)
+
+Download `Ridgeline-Setup-<version>.exe` from the
+[latest release](https://github.com/devam2001/ridgeline/releases/latest) and run it.
+- It installs for your user only, so no admin rights are needed.
+- It brings its own Python, Freqtrade and FreqUI.
+- It adds **Ridgeline** (the panel) and **Update market data** to the Start menu.
+- The installer isn't code-signed, so Windows SmartScreen may warn the first
+  time. Choose **More info → Run anyway**.
+- Your `user_data` (private config, paper sessions, data, audit trail) is kept
+  when you upgrade or uninstall.
+
+### Docker (servers)
+
+A server can pull the released image instead of building it. See
+[docs/OPERATIONS.md](docs/OPERATIONS.md#deploying-on-a-vps-docker).
+
+### From source
+
 ```bash
 python -m venv .venv
 .venv\Scripts\activate                       # macOS/Linux: source .venv/bin/activate
-pip install "freqtrade[hyperopt]" "joblib<1.6"
+pip install -r requirements.txt
 freqtrade install-ui                          # downloads FreqUI
-freqtrade list-strategies --userdir user_data # all three should show OK
+freqtrade list-strategies --userdir user_data # all four should show OK
 ```
 
-`joblib<1.6` is needed because joblib 1.6 removed a module Freqtrade's
-hyperopt still imports.
+`requirements.txt` pins Freqtrade and `joblib<1.6`. The joblib pin is needed
+because joblib 1.6 removed a module Freqtrade's hyperopt still imports.
 
 Create the private config (API secrets, gitignored). This never overwrites an existing file:
 
@@ -80,8 +103,9 @@ terminal, stop that one first (Ctrl+C) before using Start.
 ## 3. Data
 
 Research picks pairs **point-in-time**, so it needs daily candles for every
-Binance USDT pair, not just today's favourites. Do this once, then top up
-occasionally:
+Binance USDT pair, not just today's favourites. `python scripts/update_data.py`
+runs all of the steps below (it's also the installer's **Update market data**
+shortcut). Do this once, then top up monthly:
 
 ```bash
 freqtrade list-pairs --userdir user_data --quote USDT --trading-mode spot --print-json > all_usdt.json
@@ -239,6 +263,7 @@ The panel has the same: **Performance tear sheet** on Paper trading, and **Open 
 ```bash
 python scripts/init_private_config.py
 docker compose up -d --build        # bot + panel (monitor mode) + watchdog
+# or, without building: docker compose pull && docker compose up -d
 ```
 
 The watchdog sends Telegram alerts when:

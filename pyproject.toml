@@ -19,6 +19,7 @@ ignore = ["E731"]  # small lambdas for axis formatters read fine
 
 [tool.ruff.lint.per-file-ignores]
 "ridgeline/report.py" = ["E501"]  # the HTML/CSS template reads better unwrapped
+"scripts/case_study.py" = ["E501"]  # same: the paper is one HTML template
 
 [tool.ruff.lint.isort]
 known-first-party = ["ridgeline", "panel", "research", "conftest"]

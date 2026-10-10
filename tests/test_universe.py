@@ -48,3 +48,21 @@ def test_filters(datadir):
     assert "USDC/USDT" not in universe     # blacklisted
     assert "NEW/USDT" not in universe      # < 210 days of history
     assert "DEAD/USDT" not in universe     # not trading in the lookback window
+
+
+RECURSIVE_TABLE = """
+|    Indicators |     199 | 360 (from strategy) |     399 |     499 |    999 |   1999 |
+|---------------+---------+---------------------+---------+---------+--------+--------|
+| btc_ema200_1d | -5.978% |              0.392% | -0.118% | -0.148% | 0.041% | 0.041% |
+|         ema50 | -0.003% |             -0.000% |  0.000% | -0.000% | 0.000% | 0.000% |
+|           atr | -0.000% |              0.000% |  0.000% |       - |      - |      - |
+|         score |       - |                   - |    nan% |  0.000% | 0.000% | 0.000% |
+"""
+
+
+def test_recursive_gate_ignores_fewer_startup_candles_than_the_strategy_uses():
+    import research
+
+    # 5.978% is at 199 candles, below the 360 the strategy always gets.
+    assert research.worst_recursive_deviation(RECURSIVE_TABLE) == 0.392
+    assert research.worst_recursive_deviation("no table here") is None

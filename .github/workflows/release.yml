@@ -1,0 +1,117 @@
+name: Release
+
+# Pushing a tag like v0.1.0 builds and smoke-tests the Windows installer and
+# the Docker image, publishes the image to ghcr.io/devam2001/ridgeline and
+# creates the GitHub release with the installer attached.
+# Pull requests that touch packaging build and test both without publishing.
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "installer/**"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "docker-compose.yml"
+      - "requirements.txt"
+      - ".github/workflows/release.yml"
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/devam2001/ridgeline
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Version
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path pyproject.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne "v$v") {
+            throw "tag $env:GITHUB_REF_NAME doesn't match pyproject.toml version $v"
+          }
+          "VERSION=$v" >> $env:GITHUB_ENV
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue) -and -not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y
+          }
+
+      - name: Build installer
+        shell: pwsh
+        run: ./installer/build.ps1 -Python (Split-Path (Get-Command python).Source) -Version $env:VERSION
+
+      - name: Smoke-test installer
+        shell: pwsh
+        run: ./installer/smoke-test.ps1 -Installer "build/installer/Ridgeline-Setup-$env:VERSION.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: build/installer/*.exe
+          if-no-files-found: error
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        run: echo "VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: docker build --build-arg VERSION="$VERSION" -t "$IMAGE:$VERSION" -t "$IMAGE:latest" .
+
+      - name: Smoke-test image
+        run: |
+          docker run --rm "$IMAGE:$VERSION" sh -c '
+            python scripts/init_private_config.py > /dev/null &&
+            freqtrade list-strategies --userdir user_data -c user_data/config.json &&
+            python -c "import panel.app; print(\"panel imports ok\")"'
+
+      - name: Publish
+        if: github.ref_type == 'tag'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push "$IMAGE:$VERSION"
+          docker push "$IMAGE:latest"
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [windows-installer, docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: dist
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.exe "Crypto Trading Bot Case Study.pdf" \
+            --title "Ridgeline $GITHUB_REF_NAME" \
+            --notes-file "docs/releases/$GITHUB_REF_NAME.md"

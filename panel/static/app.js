@@ -586,7 +586,9 @@ $("#risk-flatten").addEventListener("click", () => {
 
 // ---------- boot ----------
 (async function init() {
-  monitorMode = (await api("/api/mode").catch(() => ({}))).monitor === true;
+  const appMode = await api("/api/mode").catch(() => ({}));
+  monitorMode = appMode.monitor === true;
+  if (appMode.version) $("#app-version").textContent = `v${appMode.version}`;
   if (monitorMode) {
     $("#paper-form").insertAdjacentHTML("beforeend",
       `<p class="muted small" style="margin-top:10px">Monitor mode: the bot runs as a Docker service, so Start/Stop/Reset are disabled here. Risk controls still work.</p>`);

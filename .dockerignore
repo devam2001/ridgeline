@@ -1,3 +1,21 @@
-# The image only needs the Dockerfile; the repo is mounted at runtime.
+# The image carries the code; docker-compose mounts user_data/ from the host.
 *
 !Dockerfile
+!panel
+!ridgeline
+!scripts
+!user_data
+user_data/config.private.json
+user_data/data
+user_data/paper
+user_data/replays
+user_data/logs
+user_data/audit
+user_data/backtest_results
+user_data/hyperopt_results
+user_data/research/runs
+user_data/research/bias
+user_data/plot
+user_data/risk_state.json
+**/*.sqlite*
+**/__pycache__

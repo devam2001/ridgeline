@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from panel.bot import MONITOR_MODE, PaperBot, PaperBotError
 from panel.common import USERDIR, list_strategies, load_json
 from panel.replay import REPLAY_DIR, BacktestError, ReplayJobs, SessionReplays
-from ridgeline import audit
+from ridgeline import __version__, audit
 from ridgeline.reconcile import session_info
 from ridgeline.report import build_tearsheet, load_trades_backtest, load_trades_db, session_balance
 
@@ -102,7 +102,7 @@ def paper_reset(req: PaperReset):
 
 @app.get("/api/mode")
 def mode():
-    return {"monitor": MONITOR_MODE}
+    return {"monitor": MONITOR_MODE, "version": __version__}
 
 
 @app.get("/api/risk")

@@ -33,3 +33,13 @@ def test_nothing_private_is_tracked():
     tracked = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True).stdout.splitlines()
     bad = [f for f in tracked if f.endswith((".docx", ".sqlite")) or f.endswith("config.private.json")]
     assert not bad, f"private files tracked by git: {bad}"
+
+
+def test_version_is_consistent():
+    import re
+
+    from ridgeline import __version__
+
+    pyproject = (ROOT / "pyproject.toml").read_text()
+    assert re.search(r'^version = "(.+)"', pyproject, re.M).group(1) == __version__
+    assert (ROOT / "docs" / "releases" / f"v{__version__}.md").exists(), "write release notes for this version"

@@ -1,0 +1,6 @@
+# Runtime dependencies (the Windows installer and the README's install step use this).
+freqtrade[hyperopt]==2026.8
+# joblib 1.6 dropped a module Freqtrade's hyperopt imports
+joblib<1.6
+httpx>=0.27
+psutil>=5.9
