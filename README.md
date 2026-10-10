@@ -73,12 +73,25 @@ terminal, stop that one first (Ctrl+C) before using Start.
 
 ## 3. Data
 
+Research picks pairs **point-in-time**, so it needs daily candles for every
+Binance USDT pair, not just today's favourites. Do this once, then top up
+occasionally:
+
 ```bash
-freqtrade download-data --userdir user_data --timeframes 1h 4h 1d --timerange 20220601-
+freqtrade list-pairs --userdir user_data --quote USDT --trading-mode spot --print-json > all_usdt.json
+freqtrade download-data --userdir user_data --pairs-file all_usdt.json --timeframes 1d --timerange 20220601-
+python scripts/research.py universe --download --write-config
 ```
 
-(Pairs come from `config.json`. The 1d timeframe is needed for the daily
-EMA200 / BTC-regime filters, which need ~200 days of warm-up.)
+The last command does three things:
+- prints the pair list used for each backtest window,
+- downloads 1h/4h data for those pairs,
+- sets `config.json`'s live/paper pair list to **today's** top 25 by volume.
+
+Re-run it monthly to keep the live list current.
+
+The 1d timeframe is also what the daily EMA200 / BTC-regime filters use, and
+those need about 200 days of warm-up.
 
 ## 4. Research - does any strategy actually have an edge?
 
@@ -90,6 +103,19 @@ python scripts/research.py bias         # Freqtrade lookahead + recursive analys
 python scripts/research.py hyperopt -s TrendRider4h --epochs 300   # tunes on in-sample only
 python scripts/research.py gates        # everything above -> user_data/research/latest.json
 ```
+
+**How pairs are chosen:** each backtest window trades the top 25 USDT pairs by
+trading volume over the 30 days *before* that window starts. It never uses
+today's list. That list favours coins that pumped during the test, which would
+quietly leak the future into the backtest.
+
+The selection skips:
+- stablecoins: by name, plus any coin whose price sat within ±5% of $1 for 90 days,
+- wrapped and leveraged tokens,
+- coins listed less than 210 days before the window.
+
+Pass `--static` to use `config.json`'s list instead. Delisted coins can't be
+downloaded, so some survivorship bias remains.
 
 - **In-sample** (2023-06-01 → 2025-06-01) is the only period used for designing and tuning.
 - **Out-of-sample** (2025-06-01 → latest data) is only used to judge the result.

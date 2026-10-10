@@ -17,3 +17,4 @@ user_data/plot/
 # Word documents stay local; publish PDFs instead
 *.docx
 ~$*.docx
+all_usdt.json

@@ -7,7 +7,9 @@ Usage (from the project root, with the venv Python):
     python scripts/research.py bias      [-s STRAT ...]   lookahead + recursive analysis
     python scripts/research.py hyperopt  -s STRAT [--epochs N] [--spaces ...]   (IS only)
     python scripts/research.py gates     [-s STRAT ...]   all of the above -> user_data/research/latest.json
-    python scripts/research.py universe  [--download]     show (and fetch data for) the point-in-time pair lists
+    python scripts/research.py universe  [--download] [--write-config]
+                                                          show the point-in-time pair lists; fetch their data;
+                                                          set config.json's live pairs to today's list
 
 Pairs are chosen point-in-time: each backtest window trades the top
 UNIVERSE_SIZE USDT pairs by volume over the 30 days BEFORE that window starts.
@@ -98,6 +100,11 @@ def universe_at(when: str, n: int = UNIVERSE_SIZE) -> tuple[str, ...]:
             continue
         window = df[(df["date"] >= lookback_start) & (df["date"] < t)]
         if len(window) < UNIVERSE_LOOKBACK_DAYS - 5:  # must have been trading throughout
+            continue
+        # Skip stablecoins the name blacklist doesn't know about: price pinned
+        # near $1 for the past 90 days.
+        recent = df.loc[(df["date"] >= t - pd.Timedelta(days=90)) & (df["date"] < t), "close"]
+        if recent.min() > 0.95 and recent.max() < 1.05:
             continue
         ranked.append((pair, float((window["close"] * window["volume"]).sum())))
     ranked.sort(key=lambda r: r[1], reverse=True)
@@ -304,6 +311,8 @@ def main() -> None:
     ap.add_argument("--loss", default="CalmarHyperOptLoss")
     ap.add_argument("--static", action="store_true", help="use config.json pairs instead of point-in-time universes")
     ap.add_argument("--download", action="store_true", help="with 'universe': download 1h/4h data for every listed pair")
+    ap.add_argument("--write-config", action="store_true",
+                    help="with 'universe': set config.json's pair_whitelist to today's universe (for paper/live)")
     args = ap.parse_args()
     global STATIC_UNIVERSE
     STATIC_UNIVERSE = args.static
@@ -316,6 +325,12 @@ def main() -> None:
         union = sorted({p for pairs in universes.values() for p in pairs})
         print(f"\n{len(union)} distinct pairs across all windows")
         print(f"today ({data_end()}): {' '.join(p.split('/')[0] for p in universe_at(data_end()))}")
+        if args.write_config:
+            path = USERDIR / "config.json"
+            cfg = json.loads(path.read_text())
+            cfg["exchange"]["pair_whitelist"] = list(universe_at(data_end()))
+            path.write_text(json.dumps(cfg, indent=4))
+            print(f"config.json pair_whitelist set to today's {len(cfg['exchange']['pair_whitelist'])} pairs")
         if args.download:
             subprocess.run([*FREQTRADE, "download-data", *config_args(), "--pairs", *union,
                             "--timeframes", "1h", "4h", "1d", "--timerange", "20220601-"], check=True)
