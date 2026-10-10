@@ -2,6 +2,9 @@
 
 **Generated:** 2026-10-11 by `python scripts/research.py gates`. Raw data is in
 `user_data/research/latest.json`, and the panel's **Research** tab shows the same numbers.
+The same run with a 65 USDT (≈100 AUD) account is in `latest-65.json`
+(`research.py gates --balance 65`). The case study PDF is built from both
+(`python scripts/case_study.py`).
 
 **Setup**
 - Long-only Binance spot, starting with $1,000, at most 3 trades open at once.
@@ -27,7 +30,8 @@
 
 | Strategy | IS return | OOS return | OOS max DD | OOS profit factor | OOS trades | Walk-forward | Gates |
 |---|---|---|---|---|---|---|---|
-| **TrendRider4h** | +5.6% | **+17.3%** | **9.8%** | **1.43** | 99 | 64% | **8 / 9** |
+| **TrendRider4h** | +5.6% | **+17.3%** | 9.8% | 1.43 | 99 | 64% | **8 / 9** |
+| MomentumRotation1d (new) | +24.4% | +13.1% | **5.2%** | **1.59** | 63 | 57% | 7 / 9 |
 | EmaRsiMomentum | +7.7% | +5.1% | 18.1% | 1.13 | 74 | 43% | 6 / 9 |
 | TrendDipBuyer1h | −8.0% | −17.8% | 19.2% | 0.73 | 300 | 36% | 4 / 9 |
 
@@ -51,6 +55,95 @@ the point of a risk layer.
 TrendRider4h fails only the sample-size gate, by **one trade**: 99 against 100.
 The gates stay as they are. Each new month of data adds about 6 OOS trades, so
 the next monthly re-run will settle it either way.
+
+MomentumRotation1d fails the sample-size gate (63 trades) and the walk-forward
+gate (57% against 60%).
+
+## Small accounts (≈100 AUD)
+
+Same gates, starting with 65 USDT (about 100 AUD at an assumed 0.65 USD per AUD):
+
+| Strategy | OOS balance (USDT) | OOS return | at 1,000 USDT | OOS max DD | Trades | Gates |
+|---|---|---|---|---|---|---|
+| TrendRider4h | 65 → 76.35 | +17.5% | +17.3% | 9.7% | 99 | 8 / 9 |
+| MomentumRotation1d | 65 → 74.08 | +14.0% | +13.1% | 7.1% | 64 | 7 / 9 |
+| EmaRsiMomentum | 65 → 68.29 | +5.1% | +5.1% | 18.1% | 74 | 6 / 9 |
+| TrendDipBuyer1h | 65 → 53.49 | −17.7% | −17.8% | 19.1% | 300 | 4 / 9 |
+
+- **A 100 AUD account works.** TrendRider4h's positions came out at about
+  6–26 USDT (median 8), above Binance's minimum order value. So it placed the
+  same trades as the 1,000 USDT account.
+- **Fees don't penalise it.** They are proportional, and there's no subscription.
+- **The absolute profit is small:** +17% of 100 AUD is about 17 AUD over 16 months.
+- **The rotation's walk-forward is weaker at 65 USDT:** 50%, against 57% at
+  1,000. Minimum order sizes change a few of its trades. It fails the same two
+  gates either way.
+
+## More risk per trade
+
+Can the profit be raised by taking more risk? TrendRider4h at 65 USDT, with
+the portfolio caps loosened in proportion:
+
+| Risk per trade | Caps (position / open risk / daily loss / halt) | IS | OOS | OOS max DD | OOS profit factor |
+|---|---|---|---|---|---|
+| 1.5% (default) | 35% / 4.5% / 3% / 15% | +5.8% | **+17.5%** | 9.7% | 1.44 |
+| 3.0% | 50% / 9% / 6% / 25% | +26.9% | +20.7% | 19.2% | 1.26 |
+| 4.5% | 70% / 13.5% / 9% / 30% | **−20.3%** | +13.1% | 27.1% | 1.14 |
+
+- **Doubling the risk** added about 3 points of OOS return. It doubled the
+  drawdown and pushed the profit factor below the 1.3 gate.
+- **Tripling it** lost money in-sample.
+
+More risk doesn't create more edge, so the default stays at 1.5%.
+
+## MomentumRotation1d (new candidate)
+
+**What it does:**
+- Every day it ranks the whole point-in-time universe by 14-day
+  volatility-adjusted momentum.
+- It holds the top 3 while BTC is above its daily EMA200.
+- It sells a coin when it drops out of the top 6, or on an ATR trailing stop.
+
+**How it was built:**
+- Its settings were chosen on in-sample data only, then the OOS was looked at once.
+- After that, one bug flagged by the stability check was fixed: the BTC EMA200
+  warm-up went from 210 to 360 days.
+
+**Results:**
+- **Lowest drawdown and best profit factor out of sample:** 5.2% and 1.59,
+  with +13.1% return. Still +12.4% with fees raised by half.
+- **Fragile.** In-sample return swung with the momentum lookback:
+
+  | Lookback | 7d | 10d | 14d | 21d | 30d | 60d |
+  |---|---|---|---|---|---|---|
+  | IS return (65 USDT, before the warm-up fix) | −15.4% | +25.1% | **+37.2%** | −4.0% | −7.6% | −5.2% |
+
+  A peak that narrow means part of the 14-day result is probably luck.
+- **The design idea isn't supported.** It was meant to hold the leaders
+  through rallies. In the +98% quarter (2024-09 → 12) it made only +0.8%,
+  against +30.7% for TrendRider4h. In the −41% quarter it lost 10.7%.
+
+## Changes to the checks in this run
+
+Both changes measure the same thing more correctly. Neither changes any
+strategy's eligibility.
+
+**Lookahead check for cross-sectional strategies.** Freqtrade's
+lookahead-analysis re-runs each signal with only that one pair loaded, so a
+ranking across pairs always looked "biased" (rank 5 in the full run against 1
+when alone).
+
+Strategies that declare `cross_sectional = True` are now checked differently:
+- `research.py` backtests 2024 again with later data removed from every pair at once.
+- Every earlier trade must be identical.
+- For MomentumRotation1d, all 132 compared trades matched.
+- A unit test also checks this on synthetic data.
+
+**Indicator stability is measured at the strategy's own warm-up or longer.**
+The old check also counted runs with fewer warm-up candles than the strategy
+declares, which never happens: Freqtrade always loads the declared warm-up.
+- MomentumRotation1d: 0.39% at its 360 candles (was reported as 6.0%, from the 199-candle column).
+- TrendRider4h: now 0.0% (was 0.2%, from columns below its 1,260 candles).
 
 ## Why this run replaces the earlier ones
 
@@ -91,7 +184,7 @@ The gap between the IS results is the most important finding:
 - **Robustness:**
   - Still +15.4% OOS with fees raised by half.
   - Freqtrade's lookahead check finds no bias.
-  - Indicators are stable whatever the warm-up length (worst deviation 0.2%).
+  - Indicators are stable at its warm-up length (0.0% deviation at 1,260 candles or more).
   - 4h vs 1h intra-candle detail gives near-identical results (+35.7% vs
     +36.2%, measured on the earlier 26-pair set).
 - **It trades rarely:** 5–7 trades a month. The stats are noisy at this sample size.
@@ -121,6 +214,9 @@ The gap between the IS results is the most important finding:
    100-trade gate will be settled honestly.
 3. **Optionally re-hyperopt TrendRider4h** on point-in-time IS universes. Treat
    it as a new candidate and judge it only on OOS.
+4. **Keep MomentumRotation1d as a candidate, not a replacement.** It needs more
+   OOS trades and a better walk-forward record. Don't re-tune its lookback on
+   the OOS period.
 
 ## Reproduce
 ```bash

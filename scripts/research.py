@@ -281,14 +281,37 @@ def recursive(strategy: str) -> dict:
     out = RESEARCH_DIR / "bias" / strategy
     out.mkdir(parents=True, exist_ok=True)
     (out / "recursive.log").write_text(text)
-    # Table rows look like "| rsi | 0.005% | ..." - take the worst deviation.
-    pcts = [abs(float(m)) for m in re.findall(r"(-?\d+\.\d+)%", text)]
     if log.returncode != 0:
         return {"recursive_max_diff_pct": None, "recursive_note": "analysis failed, see recursive.log"}
-    if not pcts and "No variance on indicator" in text:
+    worst = worst_recursive_deviation(text)
+    if worst is None and "No variance on indicator" in text:
         return {"recursive_max_diff_pct": 0.0, "recursive_note": "no variance"}
-    return {"recursive_max_diff_pct": round(max(pcts), 4) if pcts else 0.0,
-            "recursive_note": "worst indicator deviation with fewer startup candles"}
+    return {"recursive_max_diff_pct": worst or 0.0,
+            "recursive_note": "worst indicator deviation at the strategy's startup candle count or more"}
+
+
+def worst_recursive_deviation(text: str):
+    """Worst indicator deviation in recursive-analysis output, at the
+    strategy's own startup candle count or more. Columns with fewer candles
+    than the strategy declares test a setup that never runs: Freqtrade always
+    loads the declared startup candles first."""
+    rows = [[c.strip() for c in line.strip().strip("|").split("|")]
+            for line in text.splitlines() if line.startswith("|")]
+    header = next((r for r in rows if r and r[0] == "Indicators"), None)
+    if header is None:
+        return None
+    counts = [int(re.match(r"\d+", h).group()) for h in header[1:]]
+    own = next((c for h, c in zip(header[1:], counts) if "from strategy" in h), min(counts))
+    keep = [i + 1 for i, c in enumerate(counts) if c >= own]
+    worst = 0.0
+    for row in rows:
+        if row is header or len(row) != len(header):
+            continue
+        for i in keep:
+            m = re.fullmatch(r"(-?\d+\.\d+)%", row[i])
+            if m:
+                worst = max(worst, abs(float(m.group(1))))
+    return round(worst, 4)
 
 
 def bias(strategies: list[str]) -> dict:
@@ -428,7 +451,8 @@ def main() -> None:
             print(f"\n{s}: {verdict}")
             for g in r["gates"]:
                 print(f"  [{'PASS' if g['pass'] else 'FAIL'}] {g['label']}  (got {g['value']})")
-        print(f"\nwritten to {RESEARCH_DIR / 'latest.json'}")
+        name = "latest.json" if BALANCE == 1000 else f"latest-{BALANCE:g}.json"
+        print(f"\nwritten to {RESEARCH_DIR / name}")
 
 
 if __name__ == "__main__":

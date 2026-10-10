@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-10T14:06:21+00:00",
+  "generated": "2026-10-10T15:37:03+00:00",
   "periods": {
     "is": [
       "2023-06-01",
@@ -253,8 +253,8 @@
       "bias": {
         "lookahead_clean": true,
         "lookahead_note": "20 signals checked; biased indicators: none",
-        "recursive_max_diff_pct": 0.338,
-        "recursive_note": "worst indicator deviation with fewer startup candles"
+        "recursive_max_diff_pct": 0.001,
+        "recursive_note": "worst indicator deviation at the strategy's startup candle count or more"
       },
       "gates": [
         {
@@ -299,7 +299,246 @@
         },
         {
           "label": "Indicators stable vs startup candles (<= 1%)",
-          "value": 0.338,
+          "value": 0.001,
+          "pass": true
+        }
+      ],
+      "eligible_for_paper": false
+    },
+    "MomentumRotation1d": {
+      "is": {
+        "strategy": "MomentumRotation1d",
+        "timerange": "20230601-20250601",
+        "start": "2023-06-01 00:00:00",
+        "end": "2025-06-01 00:00:00",
+        "starting_balance": 1000.0,
+        "final_balance": 1244.39,
+        "profit_pct": 24.44,
+        "market_change_pct": 89.11,
+        "max_drawdown_pct": 14.77,
+        "profit_factor": 1.29,
+        "winrate_pct": 40.8,
+        "trades": 201,
+        "calmar": 4.32,
+        "sharpe": 0.41,
+        "cagr_pct": 11.54,
+        "exit_reasons": {
+          "exit_signal": {
+            "count": 149,
+            "profit_abs": 222.64
+          },
+          "trailing_stop_loss": {
+            "count": 45,
+            "profit_abs": 149.39
+          },
+          "stop_loss": {
+            "count": 7,
+            "profit_abs": -127.63
+          }
+        }
+      },
+      "oos": {
+        "strategy": "MomentumRotation1d",
+        "timerange": "20250601-20261010",
+        "start": "2025-06-01 00:00:00",
+        "end": "2026-10-09 00:00:00",
+        "starting_balance": 1000.0,
+        "final_balance": 1131.24,
+        "profit_pct": 13.12,
+        "market_change_pct": -32.82,
+        "max_drawdown_pct": 5.21,
+        "profit_factor": 1.59,
+        "winrate_pct": 42.9,
+        "trades": 63,
+        "calmar": 9.72,
+        "sharpe": 0.32,
+        "cagr_pct": 9.52,
+        "exit_reasons": {
+          "exit_signal": {
+            "count": 44,
+            "profit_abs": 202.89
+          },
+          "force_exit": {
+            "count": 2,
+            "profit_abs": -20.52
+          },
+          "trailing_stop_loss": {
+            "count": 17,
+            "profit_abs": -51.13
+          }
+        }
+      },
+      "stress": {
+        "strategy": "MomentumRotation1d",
+        "timerange": "20250601-20261010",
+        "start": "2025-06-01 00:00:00",
+        "end": "2026-10-09 00:00:00",
+        "starting_balance": 1000.0,
+        "final_balance": 1123.73,
+        "profit_pct": 12.37,
+        "market_change_pct": -32.82,
+        "max_drawdown_pct": 5.35,
+        "profit_factor": 1.54,
+        "winrate_pct": 42.9,
+        "trades": 63,
+        "calmar": 8.92,
+        "sharpe": 0.3,
+        "cagr_pct": 8.98,
+        "exit_reasons": {
+          "exit_signal": {
+            "count": 44,
+            "profit_abs": 197.48
+          },
+          "force_exit": {
+            "count": 2,
+            "profit_abs": -20.53
+          },
+          "trailing_stop_loss": {
+            "count": 17,
+            "profit_abs": -53.22
+          }
+        }
+      },
+      "walkforward": {
+        "windows": [
+          {
+            "window": "2023-06-01 -> 2023-09-01",
+            "profit_pct": -1.77,
+            "trades": 25,
+            "market_change_pct": -21.36
+          },
+          {
+            "window": "2023-09-01 -> 2023-12-01",
+            "profit_pct": 5.56,
+            "trades": 23,
+            "market_change_pct": 57.28
+          },
+          {
+            "window": "2023-12-01 -> 2024-03-01",
+            "profit_pct": 13.85,
+            "trades": 30,
+            "market_change_pct": 59.77
+          },
+          {
+            "window": "2024-03-01 -> 2024-06-01",
+            "profit_pct": 3.75,
+            "trades": 24,
+            "market_change_pct": 9.47
+          },
+          {
+            "window": "2024-06-01 -> 2024-09-01",
+            "profit_pct": -8.01,
+            "trades": 25,
+            "market_change_pct": -40.81
+          },
+          {
+            "window": "2024-09-01 -> 2024-12-01",
+            "profit_pct": 0.75,
+            "trades": 29,
+            "market_change_pct": 114.33
+          },
+          {
+            "window": "2024-12-01 -> 2025-03-01",
+            "profit_pct": -10.7,
+            "trades": 26,
+            "market_change_pct": -43.91
+          },
+          {
+            "window": "2025-03-01 -> 2025-06-01",
+            "profit_pct": -3.86,
+            "trades": 24,
+            "market_change_pct": 5.5
+          },
+          {
+            "window": "2025-06-01 -> 2025-09-01",
+            "profit_pct": 9.29,
+            "trades": 24,
+            "market_change_pct": 15.51
+          },
+          {
+            "window": "2025-09-01 -> 2025-12-01",
+            "profit_pct": 2.03,
+            "trades": 15,
+            "market_change_pct": -42.47
+          },
+          {
+            "window": "2025-12-01 -> 2026-03-01",
+            "profit_pct": 0.0,
+            "trades": 0,
+            "market_change_pct": -33.6
+          },
+          {
+            "window": "2026-03-01 -> 2026-06-01",
+            "profit_pct": -0.69,
+            "trades": 3,
+            "market_change_pct": 7.9
+          },
+          {
+            "window": "2026-06-01 -> 2026-09-01",
+            "profit_pct": 4.91,
+            "trades": 4,
+            "market_change_pct": -0.46
+          },
+          {
+            "window": "2026-09-01 -> 2026-10-10",
+            "profit_pct": 10.19,
+            "trades": 13,
+            "market_change_pct": 19.59
+          }
+        ],
+        "pct_profitable": 57.1,
+        "worst_pct": -10.7
+      },
+      "bias": {
+        "lookahead_clean": true,
+        "lookahead_note": "cross-sectional: 132 trades compared with later data removed from all pairs (94 in the full run); no differences",
+        "recursive_max_diff_pct": 0.392,
+        "recursive_note": "worst indicator deviation at the strategy's startup candle count or more"
+      },
+      "gates": [
+        {
+          "label": "OOS profit > 0%",
+          "value": 13.12,
+          "pass": true
+        },
+        {
+          "label": "OOS profit factor >= 1.3",
+          "value": 1.59,
+          "pass": true
+        },
+        {
+          "label": "OOS max drawdown <= 20%",
+          "value": 5.21,
+          "pass": true
+        },
+        {
+          "label": "OOS Calmar >= 1.0",
+          "value": 9.72,
+          "pass": true
+        },
+        {
+          "label": "OOS trades >= 100",
+          "value": 63,
+          "pass": false
+        },
+        {
+          "label": "Profitable in >= 60% of walk-forward windows",
+          "value": 57.1,
+          "pass": false
+        },
+        {
+          "label": "OOS still profitable with +50% fees",
+          "value": 12.37,
+          "pass": true
+        },
+        {
+          "label": "No lookahead bias",
+          "value": true,
+          "pass": true
+        },
+        {
+          "label": "Indicators stable vs startup candles (<= 1%)",
+          "value": 0.392,
           "pass": true
         }
       ],
@@ -492,8 +731,8 @@
       "bias": {
         "lookahead_clean": true,
         "lookahead_note": "20 signals checked; biased indicators: none",
-        "recursive_max_diff_pct": 0.338,
-        "recursive_note": "worst indicator deviation with fewer startup candles"
+        "recursive_max_diff_pct": 0.0,
+        "recursive_note": "worst indicator deviation at the strategy's startup candle count or more"
       },
       "gates": [
         {
@@ -538,7 +777,7 @@
         },
         {
           "label": "Indicators stable vs startup candles (<= 1%)",
-          "value": 0.338,
+          "value": 0.0,
           "pass": true
         }
       ],
@@ -723,8 +962,8 @@
       "bias": {
         "lookahead_clean": true,
         "lookahead_note": "20 signals checked; biased indicators: none",
-        "recursive_max_diff_pct": 0.196,
-        "recursive_note": "worst indicator deviation with fewer startup candles"
+        "recursive_max_diff_pct": 0.0,
+        "recursive_note": "worst indicator deviation at the strategy's startup candle count or more"
       },
       "gates": [
         {
@@ -769,11 +1008,12 @@
         },
         {
           "label": "Indicators stable vs startup candles (<= 1%)",
-          "value": 0.196,
+          "value": 0.0,
           "pass": true
         }
       ],
       "eligible_for_paper": false
     }
-  }
+  },
+  "balance": 1000.0
 }

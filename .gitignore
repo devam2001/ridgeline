@@ -24,3 +24,4 @@ user_data/risk_state.json
 *.reconcile.json
 .pytest_cache/
 .ruff_cache/
+build/
