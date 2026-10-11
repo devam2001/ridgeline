@@ -322,8 +322,12 @@ def bias(strategies: list[str]) -> dict:
 
 
 def hyperopt(strategy: str, epochs: int, spaces: list[str], loss: str) -> None:
+    # Tune on the same point-in-time pairs the in-sample backtest uses. Without
+    # --pairs Freqtrade would use config.json's live list, i.e. today's top
+    # coins by volume, which leaks the future into the tuning.
     cmd = [*FREQTRADE, "hyperopt", *config_args(), "--strategy", strategy,
            "--timerange", tr(*IS_RANGE), "--enable-protections",
+           "--pairs", *universe_at(IS_RANGE[0]),
            "--hyperopt-loss", loss, "--spaces", *spaces, "--epochs", str(epochs),
            "--min-trades", "60", "-j", "-2", "--random-state", "42"]
     print(" ".join(cmd))
