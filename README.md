@@ -23,6 +23,7 @@ panel cannot start a live bot at all.
 | Path | What |
 |---|---|
 | `user_data/strategies/TrendRider4h.py` | 4h Donchian breakout trend-follower, BTC bear-market filter, ATR chandelier exit |
+| `user_data/strategies/TrendRider4hPIT.py` | TrendRider4h re-tuned on point-in-time pairs (candidate; own parameter file) |
 | `user_data/strategies/TrendDipBuyer1h.py` | 1h buy-the-dip inside an uptrend (mean reversion) |
 | `user_data/strategies/EmaRsiMomentum.py` | original 1h EMA-crossover + RSI strategy (hyperoptable) |
 | `user_data/strategies/MomentumRotation1d.py` | daily rotation into the 3 strongest coins by risk-adjusted momentum while BTC is in an uptrend (candidate) |
@@ -153,9 +154,17 @@ downloaded, so some survivorship bias remains.
 Tuning against OOS would make it in-sample too, and the numbers would stop
 meaning anything.
 
-Hyperopt saves the best parameters to `user_data/strategies/<Strategy>.json`,
-which every later backtest/dry-run picks up automatically. Delete that file to
-go back to the defaults in the `.py`.
+Hyperopt tunes on the point-in-time pairs at the start of the in-sample period,
+the same pairs the in-sample backtest uses. It never uses `config.json`'s live
+list, because that's today's top coins.
+
+It saves the best parameters to `user_data/strategies/<Strategy>.json`, which
+every later backtest and dry-run picks up automatically. Delete that file to go
+back to the defaults in the `.py`.
+
+To try new parameters without touching a strategy that's paper trading, tune a
+subclass with its own name instead. For example, `TrendRider4hPIT` is
+TrendRider4h tuned on point-in-time pairs.
 
 ### Go-live gates
 

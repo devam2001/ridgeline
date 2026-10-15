@@ -66,3 +66,17 @@ def test_recursive_gate_ignores_fewer_startup_candles_than_the_strategy_uses():
     # 5.978% is at 199 candles, below the 360 the strategy always gets.
     assert research.worst_recursive_deviation(RECURSIVE_TABLE) == 0.392
     assert research.worst_recursive_deviation("no table here") is None
+
+
+def test_hyperopt_tunes_on_point_in_time_pairs(monkeypatch):
+    """Without --pairs Freqtrade would tune on config.json's live list (today's
+    top coins), leaking the future into the parameters."""
+    import research
+
+    calls = []
+    monkeypatch.setattr(research, "universe_at", lambda when: ("AAA/USDT", "BBB/USDT") if when == research.IS_RANGE[0] else ())
+    monkeypatch.setattr(research.subprocess, "run", lambda cmd, **kw: calls.append(cmd))
+    research.hyperopt("TrendRider4hPIT", 5, ["buy"], "CalmarHyperOptLoss")
+    cmd = calls[0]
+    assert cmd[cmd.index("--pairs") + 1:cmd.index("--pairs") + 3] == ["AAA/USDT", "BBB/USDT"]
+    assert cmd[cmd.index("--timerange") + 1] == research.tr(*research.IS_RANGE)
