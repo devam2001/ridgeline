@@ -1,6 +1,6 @@
 [project]
 name = "ridgeline"
-version = "0.1.0"
+version = "0.1.1"
 description = "Freqtrade crypto bot with paper trading, point-in-time research gates, risk controls and reporting"
 requires-python = ">=3.11"
 

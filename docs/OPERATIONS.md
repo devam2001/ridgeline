@@ -113,7 +113,7 @@ docker compose ps                            # bot should become "healthy" withi
 
 The image contains the code. Only `user_data/` is mounted from the host:
 config, strategies, data, databases, logs and the audit trail. To pin a
-release, set `RIDGELINE_VERSION=0.1.0` (in `.env` or the shell). The default
+release, set `RIDGELINE_VERSION=0.1.1` (in `.env` or the shell). The default
 is `latest`.
 
 Data and the strategy's pair list (see the README's Data section) can be
