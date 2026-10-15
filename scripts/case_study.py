@@ -338,6 +338,27 @@ def build_html(report: dict, small: dict | None) -> str:
                         f"that: it made only {pct(wf_r[up]['profit_pct'])} in that strongest quarter (and {pct(wf_r[down]['profit_pct'])} "
                         "in the worst one). Its rally-capture rationale is not supported by these results.")
 
+    retune = strategies.get("TrendRider4hPIT")
+    retune_section = ""
+    if retune is not None and "TrendRider4h" in strategies:
+        orig = strategies["TrendRider4h"]
+        rows = [[esc(name), pct(s["is"]["profit_pct"]), pct(s["oos"]["profit_pct"]), f'{s["oos"]["profit_factor"]:.2f}',
+                 pct(s["walkforward"]["pct_profitable"], 0, sign=False), f"{passed(name)} / {n_gates}"]
+                for name, s in (("TrendRider4h", orig), ("TrendRider4hPIT", retune))]
+        better = retune["oos"]["profit_pct"] > orig["oos"]["profit_pct"]
+        retune_section = (
+            "<h3>5.7 Re-tuning on point-in-time pairs</h3>"
+            + table(["Version", "IS return", "OOS return", "OOS PF", "WF profitable", "Gates"], rows,
+                    caption="Table 8. TrendRider4h tuned on hand-picked pairs vs re-tuned on point-in-time in-sample pairs (300 trials).")
+            + "<p>TrendRider4h's parameters were originally tuned on a hand-picked pair list, and the tuning command itself "
+            "used today's live pair list. Both leak hindsight. Re-tuning on the point-in-time universe "
+            f"raised the in-sample return from {pct(orig['is']['profit_pct'])} to {pct(retune['is']['profit_pct'])}, "
+            f"but the out-of-sample return {'rose' if better else 'fell'} from {pct(orig['oos']['profit_pct'])} to "
+            f"{pct(retune['oos']['profit_pct'])}"
+            + ("." if better else ", and the walk-forward record weakened. A large in-sample gain that doesn't carry over to new "
+               "data is the signature of overfitting, so the original parameters stay.")
+            + "</p>")
+
     verdict = (f"{len(eligible)} of {len(strategies)} strategies passed every gate" if eligible
                else f"none of the {len(strategies)} strategies passed every gate, so none is eligible for real money")
     rot_text = ""
@@ -380,9 +401,10 @@ large attack surfaces{cite(6)}, and retail automation now meets financial-servic
 <p>Marketing for trading bots tends to report backtests, which are easy to make look good. This study asks whether a strategy still
 shows an edge when it is tested the way a sceptical reviewer would test it, and whether that holds for a very small account.
 Four questions guide it:</p>
+
 <ol>
 <li><b>RQ1.</b> How is the 2026 automated-trading market structured, and what risks does it carry for retail users?</li>
-<li><b>RQ2.</b> Does any of four rule-based strategies show an edge that survives point-in-time, out-of-sample testing and nine go-live gates?</li>
+<li><b>RQ2.</b> Does any of {len(strategies)} rule-based strategies show an edge that survives point-in-time, out-of-sample testing and nine go-live gates?</li>
 <li><b>RQ3.</b> Can the system trade an account of about 100 AUD, and with what results?</li>
 <li><b>RQ4.</b> Does taking more risk per trade produce proportionally more profit?</li>
 </ol>
@@ -510,6 +532,7 @@ three while BTC is in an uptrend. A position is sold when its coin drops out of 
 were chosen on in-sample data only.</li>
 <li><b>EmaRsiMomentum:</b> a 1-hour EMA crossover with RSI, ADX and 4-hour EMA200 filters and a take-profit ladder.</li>
 <li><b>TrendDipBuyer1h:</b> buys 1-hour pullbacks inside an established uptrend (mean reversion).</li>
+{'<li><b>TrendRider4hPIT</b> (new): TrendRider4h with its parameters re-tuned on point-in-time in-sample pairs, to test whether the original tuning on hand-picked pairs was flattering it.</li>' if retune else ''}
 </ul>
 
 <h2 class="pagebreak">5. Results</h2>
@@ -552,6 +575,7 @@ drawdown halts.</p>
        caption="Table 7. MomentumRotation1d in-sample return by lookback (top 3, 65 USDT start, measured before the warm-up fix).")}
 <p>The 14-day setting was the in-sample best, but neighbouring settings fell sharply, from +37% at 14 days to −4% at 21 days. A
 peak this narrow suggests part of the in-sample result is luck, so its out-of-sample figure should be read with that caution.</p>
+{retune_section}
 
 <h2>6. Discussion</h2>
 <p><b>RQ1.</b> The market sells infrastructure rather than proven edges. Fixed fees, curve-fitted marketplace strategies and centralised

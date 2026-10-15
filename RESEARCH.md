@@ -1,6 +1,6 @@
 # Research results
 
-**Generated:** 2026-10-11 by `python scripts/research.py gates`. Raw data is in
+**Generated:** 2026-10-15 by `python scripts/research.py gates`. Raw data is in
 `user_data/research/latest.json`, and the panel's **Research** tab shows the same numbers.
 The same run with a 65 USDT (≈100 AUD) account is in `latest-65.json`
 (`research.py gates --balance 65`). The case study PDF is built from both
@@ -31,7 +31,8 @@ The same run with a 65 USDT (≈100 AUD) account is in `latest-65.json`
 | Strategy | IS return | OOS return | OOS max DD | OOS profit factor | OOS trades | Walk-forward | Gates |
 |---|---|---|---|---|---|---|---|
 | **TrendRider4h** | +5.6% | **+17.3%** | 9.8% | 1.43 | 99 | 64% | **8 / 9** |
-| MomentumRotation1d (new) | +24.4% | +13.1% | **5.2%** | **1.59** | 63 | 57% | 7 / 9 |
+| MomentumRotation1d | +24.4% | +13.1% | **5.2%** | **1.59** | 63 | 57% | 7 / 9 |
+| TrendRider4hPIT (re-tuned) | **+45.6%** | +13.8% | 9.9% | 1.33 | 98 | 50% | 7 / 9 |
 | EmaRsiMomentum | +7.7% | +5.1% | 18.1% | 1.13 | 74 | 43% | 6 / 9 |
 | TrendDipBuyer1h | −8.0% | −17.8% | 19.2% | 0.73 | 300 | 36% | 4 / 9 |
 
@@ -59,6 +60,28 @@ the next monthly re-run will settle it either way.
 MomentumRotation1d fails the sample-size gate (63 trades) and the walk-forward
 gate (57% against 60%).
 
+## Re-tuning TrendRider4h on point-in-time pairs
+
+TrendRider4h's parameters were tuned on 15 hand-picked pairs, chosen with
+today's knowledge. `research.py hyperopt` also had a bug: it tuned on
+`config.json`'s live list, today's top coins. It now tunes on the
+point-in-time universe at the start of the in-sample period.
+
+TrendRider4hPIT is the same strategy with its own parameter file. It was tuned
+that way for 300 trials (Calmar objective), using in-sample data only:
+
+| | Breakout | ADX | Trailing stop | Exit window | IS | OOS | OOS PF | Walk-forward |
+|---|---|---|---|---|---|---|---|---|
+| TrendRider4h | 15 | 23 | 4.9 × ATR | 6 | +5.6% | **+17.3%** | **1.43** | **64%** |
+| TrendRider4hPIT | 28 | 22 | 3.9 × ATR | 5 | **+45.6%** | +13.8% | 1.33 | 50% |
+
+**Re-tuning made it worse where it counts.** In-sample return went up eightfold;
+out of sample it fell by 3.5 points, and its out-of-sample quarters went from
+3 of 6 profitable to 2 of 6. That is overfitting: the tuning fitted the
+in-sample period rather than finding a better strategy. TrendRider4h stays the
+lead candidate; TrendRider4hPIT is kept as evidence. The 65 USDT run gives
+the same picture (+17.5% against +14.0%).
+
 ## Small accounts (≈100 AUD)
 
 Same gates, starting with 65 USDT (about 100 AUD at an assumed 0.65 USD per AUD):
@@ -67,6 +90,7 @@ Same gates, starting with 65 USDT (about 100 AUD at an assumed 0.65 USD per AUD)
 |---|---|---|---|---|---|---|
 | TrendRider4h | 65 → 76.35 | +17.5% | +17.3% | 9.7% | 99 | 8 / 9 |
 | MomentumRotation1d | 65 → 74.08 | +14.0% | +13.1% | 7.1% | 64 | 7 / 9 |
+| TrendRider4hPIT | 65 → 74.07 | +14.0% | +13.8% | 9.8% | 98 | 7 / 9 |
 | EmaRsiMomentum | 65 → 68.29 | +5.1% | +5.1% | 18.1% | 74 | 6 / 9 |
 | TrendDipBuyer1h | 65 → 53.49 | −17.7% | −17.8% | 19.1% | 300 | 4 / 9 |
 
@@ -198,8 +222,8 @@ The gap between the IS results is the most important finding:
 - **Survivorship bias.** Binance doesn't serve data for delisted coins, so
   coins that died between 2023 and 2026 are missing from the candidate pool.
 - **Tuning on hand-picked pairs.** TrendRider4h's parameters were tuned on the
-  hand-picked 15, not on point-in-time universes. Re-tuning on point-in-time IS
-  universes is a valid next step. It must not touch OOS.
+  hand-picked 15. Re-tuning on point-in-time pairs (TrendRider4hPIT) did worse
+  out of sample, so the original parameters stay.
 - **No modelled slippage.** Backtests fill at the candle price plus fees.
   Paper trading is where slippage shows up.
 
@@ -212,8 +236,8 @@ The gap between the IS results is the most important finding:
      the same weeks.
 2. **Re-run `research.py gates` monthly.** New data adds OOS trades, and the
    100-trade gate will be settled honestly.
-3. **Optionally re-hyperopt TrendRider4h** on point-in-time IS universes. Treat
-   it as a new candidate and judge it only on OOS.
+3. **Don't re-tune TrendRider4h again on this in-sample period.** The
+   point-in-time re-tune overfitted. More tuning would just fit it harder.
 4. **Keep MomentumRotation1d as a candidate, not a replacement.** It needs more
    OOS trades and a better walk-forward record. Don't re-tune its lookback on
    the OOS period.

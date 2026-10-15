@@ -1,0 +1,31 @@
+{
+  "strategy_name": "TrendRider4hPIT",
+  "params": {
+    "roi": {
+      "0": 100
+    },
+    "stoploss": {
+      "stoploss": -0.15
+    },
+    "trailing": {
+      "trailing_stop": false,
+      "trailing_stop_positive": null,
+      "trailing_stop_positive_offset": 0.0,
+      "trailing_only_offset_is_reached": false
+    },
+    "max_open_trades": {
+      "max_open_trades": 3
+    },
+    "buy": {
+      "adx_threshold": 22,
+      "breakout_period": 28
+    },
+    "sell": {
+      "chandelier_mult": 3.9,
+      "exit_period": 5,
+      "use_donchian_exit": true
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-10-15 10:26:42.613575+00:00"
+}
