@@ -100,6 +100,14 @@ def paper_reset(req: PaperReset):
         raise HTTPException(409, str(e))
 
 
+@app.post("/api/paper/resume")
+def paper_resume():
+    try:
+        return bot.resume_session()
+    except PaperBotError as e:
+        raise HTTPException(409, str(e))
+
+
 @app.get("/api/mode")
 def mode():
     return {"monitor": MONITOR_MODE, "version": __version__}

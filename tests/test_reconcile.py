@@ -197,3 +197,15 @@ def test_replay_trades_left_open_come_back_open(tmp_path):
     assert list(df["is_open"]) == [False, True]
     assert pd.isna(df.loc[1, "profit_abs"]) and df.loc[0, "profit_abs"] == 10.0
     assert meta["end"] == T("2026-10-05 04:00") and meta["timeframe"] == "4h"
+
+
+def test_offline_periods_are_found_in_the_log(tmp_path):
+    db = tmp_path / "s.sqlite"
+    make_db(db)
+    beats = pd.date_range("2026-09-02 10:00", periods=30, freq="1min").append(
+        pd.date_range("2026-09-02 13:30", periods=30, freq="1min"))   # down from 10:29 to 13:30
+    (tmp_path / "s.log").write_text("".join(f"{t:%Y-%m-%d %H:%M:%S},123 - freqtrade.worker - INFO - Bot heartbeat.\n"
+                                            for t in beats))
+    s = session_info(db, pairs=["BTC/USDT"], end="2026-10-01")
+    assert s.downtime_hours == pytest.approx(3.02, abs=0.01)
+    assert any("offline 1 time(s)" in w and "3.0 h" in w for w in s.warnings)

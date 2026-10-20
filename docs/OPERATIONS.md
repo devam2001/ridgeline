@@ -231,6 +231,10 @@ The result notes things the replay can't reproduce, so check those first:
 - drawdown halts, which need a manual resume live but resume automatically in backtests
 - strategy code or parameters changed during the session
 - paper trades newer than the latest closed candle
+- time the bot was offline (a reboot, sleep or crash): any stretch of 10+
+  minutes without log output. The replay keeps trading through these gaps, so
+  keep downtime short. After a restart, press **Resume** rather than Reset:
+  Resume continues the same session.
 
 **If it fails.** Don't loosen the targets. Find out why the two diverged. If
 the backtest assumptions are wrong (for example, real fills are consistently

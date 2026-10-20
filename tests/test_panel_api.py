@@ -135,3 +135,59 @@ def test_reconcile_refuses_until_the_first_candle_closes(client, userdir):
     r = client.post("/api/paper/sessions/s3/reconcile")
     assert r.status_code == 409 and "Nothing to replay yet" in r.json()["detail"]
     assert not (userdir / "paper" / "s3.reconcile.json").exists()
+
+
+def test_resume_needs_a_previous_session(client):
+    r = client.post("/api/paper/resume")
+    assert r.status_code == 409 and "no previous" in r.json()["detail"]
+
+
+def test_resume_restarts_the_same_session_with_its_own_pairs(client, monkeypatch):
+    paper = bot_mod.PAPER_DIR
+    make_session(paper.parent, "s9", {"strategy": "TrendRider4h", "pairs": ["SOL/USDT"], "balance": 100,
+                                      "started": "2026-10-01T00:00:00+00:00"})
+    (paper / "s9.config.json").write_text(json.dumps({"dry_run": True, "dry_run_wallet": 100,
+                                                      "exchange": {"key": "", "secret": ""}}))
+    (paper / "state.json").write_text(json.dumps({"pid": None, "session_id": "s9", "strategy": "TrendRider4h",
+                                                  "balance": 100, "stopped": "2026-10-05T00:00:00+00:00"}))
+    launched = []
+    monkeypatch.setattr(bot_mod, "_port_open", lambda url: False)
+    monkeypatch.setattr(bot_mod.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout='{"dry_run": true}', stderr=""))
+    monkeypatch.setattr(bot_mod.subprocess, "Popen", lambda cmd, **k: launched.append(cmd) or SimpleNamespace(pid=4242))
+
+    assert client.get("/api/paper/status").json()["can_resume"] is True
+    state = client.post("/api/paper/resume").json()
+    assert state["session_id"] == "s9" and state["pid"] == 4242 and len(state["resumed"]) == 1 and "stopped" not in state
+    # pinned to what the session started with, not today's config.json list
+    assert json.loads((paper / "s9.config.json").read_text())["exchange"]["pair_whitelist"] == ["SOL/USDT"]
+    cmd = launched[0]
+    assert str(paper / "s9.config.json") in cmd and cmd[cmd.index("--strategy") + 1] == "TrendRider4h"
+    assert client.get("/api/audit").json()["events"][0]["event"] == "paper_session_resumed"
+
+
+def test_resume_refuses_a_live_config(client, monkeypatch):
+    paper = bot_mod.PAPER_DIR
+    make_session(paper.parent, "s8", {"strategy": "TrendRider4h", "pairs": ["SOL/USDT"], "balance": 100,
+                                      "started": "2026-10-01T00:00:00+00:00"})
+    (paper / "s8.config.json").write_text(json.dumps({"dry_run": True}))
+    (paper / "state.json").write_text(json.dumps({"session_id": "s8", "strategy": "TrendRider4h"}))
+    monkeypatch.setattr(bot_mod, "_port_open", lambda url: False)
+    monkeypatch.setattr(bot_mod.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout='{"dry_run": false}', stderr=""))
+
+    def no_launch(*a, **k):
+        raise AssertionError("a bot process was launched")
+
+    monkeypatch.setattr(bot_mod.subprocess, "Popen", no_launch)
+    r = client.post("/api/paper/resume")
+    assert r.status_code == 409 and "Refusing" in r.json()["detail"]
+
+
+def test_risk_resume_restarts_trading_not_the_session(client, monkeypatch):
+    """/api/bot/resume is the risk control (restart entries, clear a halt);
+    /api/paper/resume restarts a stopped session. They must not be mixed up."""
+    calls = []
+    monkeypatch.setattr(app_mod.bot, "_call", lambda method, path, **kw: calls.append(path) or {"status": "ok"})
+    monkeypatch.setattr(app_mod.bot, "resume_session", lambda: (_ for _ in ()).throw(AssertionError("session resumed")))
+    monkeypatch.setattr(bot_mod, "set_halt", lambda *a, **k: None)
+    assert client.post("/api/bot/resume").status_code == 200
+    assert calls == ["start"]

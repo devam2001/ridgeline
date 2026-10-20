@@ -29,7 +29,7 @@ import psutil
 
 from panel.common import FREQTRADE, ROOT, USERDIR, config_args, load_json, merged_config
 from ridgeline import audit
-from ridgeline.reconcile import strategy_fingerprint
+from ridgeline.reconcile import session_info, strategy_fingerprint
 from ridgeline.risk import RiskLimits, build_state, limits_summary, load_halt, set_halt
 
 MONITOR_MODE = os.environ.get("PANEL_MODE", "").lower() == "monitor"
@@ -87,11 +87,9 @@ class PaperBot:
 
     # --- actions ---
 
-    def start(self, balance: float, strategy: str) -> dict:
+    def _preflight(self) -> None:
         if MONITOR_MODE:
             raise PaperBotError("Process control is disabled in monitor mode (Docker manages the bot).")
-        if balance <= 0:
-            raise PaperBotError("Starting balance must be positive.")
         if self._our_process():
             raise PaperBotError("A paper session is already running. Stop or reset it first.")
         if _port_open(self.base_url):
@@ -100,30 +98,84 @@ class PaperBot:
                 "started by hand). Stop it first - the panel will not kill processes it didn't start."
             )
 
+    def start(self, balance: float, strategy: str) -> dict:
+        if balance <= 0:
+            raise PaperBotError("Starting balance must be positive.")
+        self._preflight()
+
         session_id = datetime.now().strftime("%Y%m%d-%H%M%S")
+        cfg = merged_config()
+        pairs = cfg.get("exchange", {}).get("pair_whitelist", [])
         session_cfg = PAPER_DIR / f"{session_id}.config.json"
         session_cfg.write_text(json.dumps({
             "dry_run": True,
             "dry_run_wallet": balance,
             "db_url": f"sqlite:///user_data/paper/{session_id}.sqlite",
             "bot_name": f"paper-{session_id}",
-            "exchange": {"key": "", "secret": ""},
+            # Pin the pair list: config.json's changes monthly, and a session
+            # resumed after a restart must keep trading what it started with.
+            "exchange": {"key": "", "secret": "", "pair_whitelist": pairs},
         }, indent=2))
         args = [*config_args(), "-c", str(session_cfg)]
         self._verify_dry_run(args)
         # What this session runs, for reconciling it with a replay later:
         # config.json's pair list changes monthly, and code can change mid-session.
-        cfg = merged_config()
         (PAPER_DIR / f"{session_id}.meta.json").write_text(json.dumps({
             "session_id": session_id,
             "strategy": strategy,
             "balance": balance,
-            "pairs": cfg.get("exchange", {}).get("pair_whitelist", []),
+            "pairs": pairs,
             "max_open_trades": cfg.get("max_open_trades"),
             "started": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "code": strategy_fingerprint(strategy),
         }, indent=2))
 
+        state = {
+            "pid": self._spawn(session_id, args, strategy),
+            "session_id": session_id,
+            "strategy": strategy,
+            "balance": balance,
+            "started": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
+        self._save_state(state)
+        audit.append("paper_session_started", "panel",
+                     {"session_id": session_id, "strategy": strategy, "balance": balance})
+        return state
+
+    def resume_session(self) -> dict:
+        """Restart the last session's bot on the same database, after a reboot,
+        a crash or a Stop. Open trades, the wallet and the trade history carry
+        on, so a weeks-long paper test isn't lost to a restart."""
+        self._preflight()
+        state = self._state()
+        session_id = state.get("session_id")
+        if not session_id:
+            raise PaperBotError("There's no previous paper session to resume.")
+        session_cfg = PAPER_DIR / f"{session_id}.config.json"
+        db = PAPER_DIR / f"{session_id}.sqlite"
+        if not session_cfg.exists() or not db.exists():
+            raise PaperBotError(f"Session {session_id}'s files are missing. Start a new session instead.")
+        try:
+            info = session_info(db)
+        except ValueError as e:
+            raise PaperBotError(f"Can't resume session {session_id}: {e}") from e
+        cfg = load_json(session_cfg, {}) or {}
+        if not cfg.get("exchange", {}).get("pair_whitelist"):
+            # Sessions from before pairs were pinned: keep what they traded,
+            # not whatever config.json lists today.
+            cfg.setdefault("exchange", {}).update(key="", secret="", pair_whitelist=info.pairs)
+            session_cfg.write_text(json.dumps(cfg, indent=2))
+        args = [*config_args(), "-c", str(session_cfg)]
+        self._verify_dry_run(args)
+        strategy = state.get("strategy") or info.strategy
+        state.update(pid=self._spawn(session_id, args, strategy), strategy=strategy,
+                     resumed=[*state.get("resumed", []), datetime.now(timezone.utc).isoformat(timespec="seconds")])
+        state.pop("stopped", None)
+        self._save_state(state)
+        audit.append("paper_session_resumed", "panel", {"session_id": session_id, "strategy": strategy})
+        return state
+
+    def _spawn(self, session_id: str, args: list[str], strategy: str) -> int:
         log_path = PAPER_DIR / f"{session_id}.log"
         cmd = [*FREQTRADE, "trade", *args, "--strategy", strategy, "--logfile", str(log_path)]
         popen_kw = dict(cwd=ROOT, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
@@ -138,17 +190,7 @@ class PaperBot:
                 proc = subprocess.Popen(cmd, creationflags=flags, **popen_kw)
         else:
             proc = subprocess.Popen(cmd, start_new_session=True, **popen_kw)
-        state = {
-            "pid": proc.pid,
-            "session_id": session_id,
-            "strategy": strategy,
-            "balance": balance,
-            "started": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        }
-        self._save_state(state)
-        audit.append("paper_session_started", "panel",
-                     {"session_id": session_id, "strategy": strategy, "balance": balance})
-        return state
+        return proc.pid
 
     def _verify_dry_run(self, args: list[str]) -> None:
         out = subprocess.run([*FREQTRADE, "show-config", *args], cwd=ROOT,
@@ -289,6 +331,8 @@ class PaperBot:
             "api_up": False,
             "session": state if ours else None,
             "last_session": state if not ours and state else None,
+            "can_resume": (not ours and not listening and not MONITOR_MODE and bool(state.get("session_id"))
+                           and (PAPER_DIR / f"{state.get('session_id')}.sqlite").exists()),
             "freqtrade_ui": self.base_url,
         }
         if not listening:

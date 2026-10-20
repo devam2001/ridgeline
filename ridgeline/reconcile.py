@@ -75,11 +75,12 @@ class SessionInfo:
     end: pd.Timestamp
     max_open_trades: Optional[int] = None
     warnings: list[str] = field(default_factory=list)
+    downtime_hours: float = 0.0
 
     def to_dict(self) -> dict:
         return {"session_id": self.session_id, "strategy": self.strategy, "pairs": self.pairs,
                 "balance": self.balance, "start": self.start.isoformat(), "end": self.end.isoformat(),
-                "max_open_trades": self.max_open_trades}
+                "max_open_trades": self.max_open_trades, "downtime_hours": self.downtime_hours}
 
 
 def strategy_fingerprint(strategy: str, strategy_dir: Path = STRATEGY_DIR) -> dict[str, Optional[str]]:
@@ -154,8 +155,36 @@ def session_info(db: Path, *, log: Optional[Path] = None, strategy: Optional[str
             warnings.append(f"Changed since the session started: {', '.join(changed)}. "
                             "The replay runs the current version, so some differences are expected.")
 
+    gaps = log_gaps(logs)
+    downtime = sum((b - a for a, b in gaps), pd.Timedelta(0))
+    if gaps:
+        longest = max(b - a for a, b in gaps)
+        warnings.append(f"The bot was offline {len(gaps)} time(s), {_hours(downtime)} in total (longest "
+                        f"{_hours(longest)}, from {gaps[0][0]:%Y-%m-%d %H:%M} local time on). The replay trades through "
+                        "those gaps, so trades it takes while the bot was down are missing from paper.")
+
     return SessionInfo(session_id=db.stem, db=db, strategy=strategy, pairs=list(pairs), balance=float(balance),
-                       start=start, end=end, max_open_trades=meta.get("max_open_trades"), warnings=warnings)
+                       start=start, end=end, max_open_trades=meta.get("max_open_trades"), warnings=warnings,
+                       downtime_hours=round(downtime.total_seconds() / 3600, 2))
+
+
+# A running bot logs a heartbeat every minute; silence longer than this means it was down.
+OFFLINE_AFTER = pd.Timedelta(minutes=10)
+_LOG_TIME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", re.M)
+
+
+def log_gaps(logs: list[Path], threshold: pd.Timedelta = OFFLINE_AFTER) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
+    """Periods with no log output for longer than `threshold`, in the bot's
+    local time: a reboot, a crash, the PC asleep, or a Stop and a Resume."""
+    text = [m for p in logs for m in _LOG_TIME_RE.findall(p.read_text(encoding="utf-8", errors="replace"))]
+    stamps = pd.Series(pd.to_datetime(text, format="%Y-%m-%d %H:%M:%S")).sort_values().reset_index(drop=True)
+    gap = stamps.diff() > threshold
+    return [(stamps[i - 1], stamps[i]) for i in gap[gap].index]
+
+
+def _hours(delta: pd.Timedelta) -> str:
+    hours = delta.total_seconds() / 3600
+    return f"{hours:.1f} h" if hours < 48 else f"{hours / 24:.1f} days"
 
 
 def _load_json(path: Path) -> dict:

@@ -130,6 +130,7 @@ async function refreshPaper() {
 
   $("#paper-start").disabled = paperBusy || st.managed || st.external || monitorMode;
   $("#paper-stop").disabled = paperBusy || !st.managed || monitorMode;
+  $("#paper-resume").disabled = paperBusy || !st.can_resume;
   $("#paper-reset").disabled = paperBusy || st.external || monitorMode;
   ["#risk-pause", "#risk-resume", "#risk-flatten"].forEach((id) => ($(id).disabled = paperBusy || !st.api_up));
   if (st.api_up) refreshRisk(); else $("#risk-meters").innerHTML = `<p class="muted small">Available while a bot is running.</p>`;
@@ -196,6 +197,7 @@ $("#paper-form").addEventListener("submit", (e) => {
   paperAction(() => api("/api/paper/start", { method: "POST", body: { balance: +$("#paper-balance").value, strategy: $("#paper-strategy").value } }));
 });
 $("#paper-stop").addEventListener("click", () => paperAction(() => api("/api/paper/stop", { method: "POST" })));
+$("#paper-resume").addEventListener("click", () => paperAction(() => api("/api/paper/resume", { method: "POST" })));
 $("#paper-reset").addEventListener("click", () => {
   const bal = +$("#paper-balance").value;
   if (!confirm(`Start a fresh paper session with ${bal} USDT? The current session's trades are kept in its own archive file.`)) return;
