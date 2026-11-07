@@ -92,6 +92,8 @@ Open **http://127.0.0.1:8090**.
   strategy, press **Start**. The bot trades live Binance prices without sending
   orders. **Reset wallet** starts a fresh session with a new balance; every
   session keeps its own database in `user_data/paper/`, so old results aren't lost.
+  **Resume** restarts the last session after a reboot, crash or Stop, with the
+  same wallet, open trades and pair list. A 4-week paper test survives restarts.
   While it runs, **Open FreqUI** (http://127.0.0.1:8080, log in with the username/password
   from `config.private.json`) shows charts, per-trade detail and more.
 - **Replay:** pick strategy, balance and date range. It simulates that period in
